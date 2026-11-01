@@ -7,3 +7,4 @@ httpx==0.28.1
 python-dotenv==1.2.4
 mcp==1.30.0
 vibe-trading-ai==0.1.18
+jsonschema==4.26.0
