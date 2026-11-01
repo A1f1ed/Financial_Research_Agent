@@ -16,14 +16,14 @@ function useController() {
   const { agent, isReady } = useAgent({ agentId: AGENT_ID, throttleMs: 50 });
   const { copilotkit } = useCopilotKit();
   const { mutate } = useSWRConfig();
-  const { data: health, mutate: refreshHealth } = useSWR<{ configured: boolean; python: boolean; cloudConfigured: boolean; financialData: boolean }>('/api/agent/status', fetchJSON, { refreshInterval: 30000, shouldRetryOnError: false });
+  const { data: health, mutate: refreshHealth } = useSWR<{ configured: boolean; python: boolean; cloudConfigured: boolean; financialData: boolean; modelConfigured: boolean }>('/api/agent/status', fetchJSON, { refreshInterval: 30000, shouldRetryOnError: false });
   const [error, setError] = useState<string | null>(null);
   const state = { ...initialResearchState, ...agent.state } as ResearchState;
   const setState = (patch: Partial<ResearchState>) => agent.setState({ ...initialResearchState, ...agent.state, ...patch });
   useEffect(() => {
     if (!isReady) return;
     const { unsubscribe } = agent.subscribe({
-      onRunErrorEvent: ({ event }) => setError(event.message.startsWith('AI Gateway 需要') ? event.message : '研究未能完成，请检查 Python Agent 和模型服务后重试。'),
+      onRunErrorEvent: ({ event }) => setError(event.message.startsWith('DashScope ') ? event.message : '研究未能完成，请检查 Python Agent 和模型服务后重试。'),
       onRunFailed: () => setError(previous => previous ?? '连接中断。已收到的内容会保留，请稍后重试。'),
       onRunFinalized: () => { void mutate('/api/agent/threads'); },
     });
@@ -53,6 +53,7 @@ function useController() {
   const submit = async (question: string) => {
     if (!question.trim() || agent.isRunning) return false;
     if (!isReady || !health?.python) { setError('Python Agent 尚未就绪，请检查连接后重试。'); void refreshHealth(); return false; }
+    if (!health.modelConfigured) { setError('DashScope 未配置：请在项目 Vars 中添加 DASHSCOPE_API_KEY，然后重新检查连接。'); void refreshHealth(); return false; }
     setError(null);
     setState({ stage: 'planning' });
     agent.addMessage({ id: crypto.randomUUID(), role: 'user', content: question.trim().slice(0, 2000) });

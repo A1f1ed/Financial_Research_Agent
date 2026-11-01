@@ -11,6 +11,9 @@ importers:
       '@ag-ui/client':
         specifier: ^1.0.2
         version: 1.0.2
+      '@ai-sdk/openai-compatible':
+        specifier: ^3.0.82
+        version: 3.0.82(zod@3.25.76)
       '@copilotkit/react-core':
         specifier: 1.83.0
         version: 1.83.0(@cfworker/json-schema@4.1.4)(@types/mdast@4.0.4)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(micromark-util-types@2.0.3)(micromark@4.0.3)(react-dom@19.3.1(react@19.3.1))(react-is@18.3.1)(react@19.3.1)(redux@5.0.1)(zod@3.25.76)
@@ -174,6 +177,12 @@ packages:
   '@ai-sdk/openai-compatible@1.0.60':
     resolution: {integrity: sha512-K/Io62kjaOywFCMA2YN4VUhNJYlZNXsvziZGhPwcYrSKCjzjgkJCHnCZGLFyc/fW376AoYYsv++H4L6OLOdbtA==}
     engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai-compatible@3.0.82':
+    resolution: {integrity: sha512-wey0CbujWRkZbbrJjw/GJHyjXpt0v44PQKaTGTVGmigqnM057G7GQHDyZQQj9O0lICY5qJxzpn4wCSftT8BSQg==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
@@ -3691,6 +3700,12 @@ snapshots:
     dependencies:
       '@ai-sdk/provider': 2.0.5
       '@ai-sdk/provider-utils': 3.0.43(zod@3.25.76)
+      zod: 3.25.76
+
+  '@ai-sdk/openai-compatible@3.0.82(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.35
+      '@ai-sdk/provider-utils': 5.0.72(zod@3.25.76)
       zod: 3.25.76
 
   '@ai-sdk/openai@3.0.135(zod@3.25.76)':

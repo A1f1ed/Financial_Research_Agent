@@ -11,5 +11,5 @@ export async function GET() {
       financialData = python && status.financialData === true;
     } catch { python = false; }
   }
-  return Response.json({ configured, python, cloudConfigured: Boolean(process.env.CPK_INTELLIGENCE_API_KEY), learning: 'opt-in', financialData }, { headers: { 'Cache-Control': 'no-store' } });
+  return Response.json({ configured, python, cloudConfigured: Boolean(process.env.CPK_INTELLIGENCE_API_KEY), modelConfigured: Boolean(process.env.DASHSCOPE_API_KEY?.trim()), model: 'qwen3.8-flash', modelProvider: 'dashscope', learning: 'opt-in', financialData }, { headers: { 'Cache-Control': 'no-store' } });
 }
