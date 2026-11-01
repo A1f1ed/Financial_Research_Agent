@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 .venv/
+.vibe-research/
 venv/
 __pycache__/
 *.pyc
@@ -11,3 +12,6 @@ node_modules/
 out/
 next-env.d.ts
 *.tsbuildinfo
+
+# Added by CopilotKit CLI: browser snapshots a coding agent writes.
+.playwright-mcp/

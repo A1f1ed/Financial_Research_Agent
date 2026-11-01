@@ -1,0 +1,8 @@
+{
+  "projectId": "16699",
+  "projectSlug": "finance-agent",
+  "clerkOrgId": "org_3LQF8Gp9hsxoXMBw2mkDh1OAZRr",
+  "telemetryBindingId": "c1546a62-67e6-49fd-8c60-89aeaa3c82ea",
+  "runtimeUrl": "http://localhost:3000/api/copilotkit",
+  "apiKeyDirectory": "."
+}
