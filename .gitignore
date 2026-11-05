@@ -15,3 +15,4 @@ next-env.d.ts
 
 # Added by CopilotKit CLI: browser snapshots a coding agent writes.
 .playwright-mcp/
+.copilotkit/
