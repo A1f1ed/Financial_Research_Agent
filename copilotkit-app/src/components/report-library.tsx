@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowUpRight, BookOpen, Columns2, Trash2 } from "lucide-react";
 import { formatReportTime, STATUS_NAMES, type ReportSummary } from "@/lib/research";
+import { canCompareReports } from "@/lib/report-comparison";
 
 export function ReportLibrary({ reports, loading, error, refresh, onOpen, onArchive, onCompare, onNew }: {
   reports: ReportSummary[]; loading: boolean; error: string; refresh: () => Promise<void>;
@@ -38,7 +39,7 @@ export function ReportLibrary({ reports, loading, error, refresh, onOpen, onArch
 
   return <section className="library-view">
     <div className="section-eyebrow">RESEARCH LIBRARY</div><h1>让研究持续积累。</h1>
-    <p className="intro">检索历史研究，选择同一标的的两份单股报告，对照观点、研究范围与各自的证据。</p>
+    <p className="intro">选择两份单股报告，回看同一标的的研究变化，或在同一截止日横向核对两个标的的观点、风险与证据。</p>
     <div className="finance-card library-filters">
       <label>检索报告<input type="search" value={query} placeholder="证券代码、截止日期或摘要" onChange={event => setQuery(event.target.value)} /></label>
       <label>报告类型<select value={kind} onChange={event => setKind(event.target.value)}>
@@ -54,7 +55,8 @@ export function ReportLibrary({ reports, loading, error, refresh, onOpen, onArch
     {loading && !reports.length && <div className="finance-card" role="status">正在读取报告库…</div>}
     {!!reports.length && <div className="library-compare-controls">
       <p className="field-note">显示 {shown.length} / {reports.length} 份。可对照已完成或部分完成的单股报告。
-        {chosen.length > 0 && `已选 ${chosen.length} 份 · ${chosen[0].symbol}。`}</p>
+        {chosen.length > 0 && `已选 ${chosen.length} 份。`}</p>
+      <p className="field-note">同一标的可跨日期回看；双标的需同一截止日和市场，沪深可互相对照。对照读取已有报告，不重新运行研究。</p>
       <div className="workbench-actions">
         {chosen.map(report => <span className="status-badge" key={report.id}>{report.symbol} · {report.as_of} · {formatReportTime(report.created_at)}</span>)}
         {!!chosen.length && <button type="button" className="chat-config-toggle" onClick={() => setSelection([])}>清除选择</button>}
@@ -68,7 +70,7 @@ export function ReportLibrary({ reports, loading, error, refresh, onOpen, onArch
     {shown.map(report => {
       const selected = selection.includes(report.id);
       const comparable = !report.workflow && ["complete", "partial"].includes(report.status);
-      const selectable = comparable && (selected || !chosen.length || chosen.length < 2 && chosen[0].symbol === report.symbol);
+      const selectable = comparable && (selected || !chosen.length || chosen.length < 2 && canCompareReports(chosen[0], report));
       return <article className="finance-card library-report" key={report.id}>
         <div className="library-card">
           <div><span className={`status-badge ${report.status}`}>{STATUS_NAMES[report.status] || report.status}</span>
@@ -78,7 +80,7 @@ export function ReportLibrary({ reports, loading, error, refresh, onOpen, onArch
             <small>{report.assessment?.summary?.slice(0, 150) || "报告尚未形成最终结论"}</small>
           </div>
           <div className="library-report-actions">
-            {comparable && <label className="candidate-label"><input type="checkbox" checked={selected} disabled={!selectable}
+            {comparable && <label className="candidate-label" title={!selectable ? "最多选择两份；双标的需要相同市场和截止日期" : undefined}><input type="checkbox" checked={selected} disabled={!selectable}
               aria-label={`选择对照 ${report.symbol} ${report.as_of} ${report.id.slice(0, 8)}`}
               onChange={() => setSelection(previous => selected ? previous.filter(id => id !== report.id) : [...chosen.map(item => item.id), report.id])} />加入对照</label>}
             <button type="button" className="chat-config-toggle" onClick={() => onOpen(report.id)}>阅读报告 <ArrowUpRight size={15} /></button>

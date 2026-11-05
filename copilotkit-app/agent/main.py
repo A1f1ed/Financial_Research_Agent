@@ -34,6 +34,7 @@ from src.review_checks import router as review_checks_router, run_review_checks
 from src.review_candidates import initialize_candidates, router as review_candidates_router
 from src.a_share_events import router as a_share_events_router
 from src.market_sentiment import router as market_sentiment_router
+from src.report_comparison import router as report_comparison_router
 from src.preferences import AISettings, DataSettings, public_ai_settings, read_setting, write_setting
 import json
 from copilotkit import LangGraphAGUIAgent
@@ -72,6 +73,7 @@ app.include_router(review_checks_router)
 app.include_router(review_candidates_router)
 app.include_router(a_share_events_router)
 app.include_router(market_sentiment_router)
+app.include_router(report_comparison_router)
 
 
 @app.get("/research/settings")

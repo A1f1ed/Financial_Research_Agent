@@ -187,6 +187,18 @@
 .finance-card .comparison-sources { list-style: none; padding: 0; }
 .comparison-sources li { margin: 6px 0; }
 .comparison-sources button { max-width: 100%; white-space: normal; text-align: left; }
+.comparison-prices { --comparison-secondary: #d5ae71; }
+.light .comparison-prices { --comparison-secondary: #946426; }
+.comparison-price-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.comparison-price-heading label { width: 180px; max-width: 100%; }
+.comparison-price-chart { height: 240px; width: 100%; min-width: 0; margin: 14px 0; }
+.comparison-chart-key { display: flex; flex-wrap: wrap; gap: 16px; list-style: none; padding: 0; font-size: 12px; }
+.comparison-chart-key li { display: inline-flex; align-items: center; gap: 7px; }
+.comparison-chart-key i { width: 22px; border-top: 2px solid var(--finance-accent); }
+.comparison-chart-key .comparison-line-1 { border-top: 2px dashed var(--comparison-secondary); }
+.comparison-price-stat { border-top: 1px solid var(--border); }
+.comparison-price-gaps { color: var(--finance-muted); font-size: 12px; line-height: 1.8; padding-left: 20px; }
+.comparison-prices .comparison-metric-row { grid-template-columns: minmax(80px, 1fr) repeat(2, minmax(0, 1fr)); }
 .report-navigation { display: flex; flex-wrap: wrap; min-height: 53px; }
 .review-screen h2 svg { display: inline-block; vertical-align: -2px; margin-right: 4px; }
 .screen-condition-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }

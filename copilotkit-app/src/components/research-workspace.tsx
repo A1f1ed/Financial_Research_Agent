@@ -319,9 +319,11 @@ export function ResearchWorkspace() {
             onOpen={loadReport} onArchive={archive} onNew={() => setTab("config")}
             onCompare={ids => { setComparisonIds(ids); setTab("comparison"); }} />
         </div>
-        {!chatVisible && tab !== "review" && tab !== "library" && <div className="research-scroll" key={tab}>
-            {tab === "comparison" && comparisonIds && <ReportComparison ids={comparisonIds} onBack={() => setTab("library")}
-              onOpen={loadReport} onSource={(selected, id) => { setSavedReport(selected); showSource(id); }} />}
+        {comparisonIds && <div className="research-scroll" hidden={tab !== "comparison"} key={comparisonIds.join(":")}>
+            <ReportComparison ids={comparisonIds} visible={tab === "comparison"} onBack={() => setTab("library")}
+              onOpen={loadReport} onSource={(selected, id) => { setSavedReport(selected); showSource(id); }} />
+        </div>}
+        {!chatVisible && tab !== "review" && tab !== "library" && tab !== "comparison" && <div className="research-scroll" key={tab}>
             {tab === "config" && <div className="stock-workspace">
               <span className="section-eyebrow">股票分析</span>
               <h1>单股分析</h1>
