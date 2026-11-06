@@ -38,17 +38,17 @@ These screenshots illustrate the interface, not a model accuracy claim or an inv
 
 ## Features
 
-| Workflow | What you can do |
-| --- | --- |
-| Research chat | Use native CopilotKit chat, streaming answers, expandable tool calls, provider-supplied reasoning and contextual follow-up questions. Explore 18 concrete finance workflow examples; selecting one fills a draft for you to edit and send. |
-| Single-stock research | Choose a symbol, market, information cutoff date, depth and analysts. Run multiple independent tasks. Select fundamentals, technicals, news, sentiment, market and sector analysts, with bull/bear and risk review options. |
-| Execution tracking | Follow queue status, research stages and an estimated time remaining. Open the report or ask questions bound to that specific research. Estimates are approximate, not completion guarantees. |
-| Report library | Search and filter saved research, inspect source IDs and publication times, ask report-specific questions, and export Markdown, JSON or PDF. Generation timestamps include minutes. |
-| Report comparison | Compare one stock across dates, or two stocks in the same market on the same cutoff date. Align saved prices on common trading sessions, with 5/20/60-session windows and a first-close index of 100. No new model run is needed. |
-| A-share closing review | Review a selected sample against a benchmark, volume ratios, limit-up/down and failed-breakout pools, streaks, next-day follow-through and recent industry distributions. |
-| Candidates and checks | Keep observations and notes, reuse candidates in reviews and schedules, and save measurable next-trading-day conditions. While the service runs, pending checks are evaluated after the target close when data is available. |
-| Scheduled research | Draft market morning briefs, topic news roundups, watchlist move scans, filing trackers, weekly reviews or stock research. Presets fill forms; you create the schedule. Enable/disable, run now, inspect per-plan history, or delete records individually/in batches. |
-| AI and appearance | Configure separate Qwen, DeepSeek and GLM profiles, test a greeting without saving, then save and activate. Switch English/Chinese and charcoal dark/fresh light themes. Responsive layouts support narrow screens. |
+| Workflow               | What you can do                                                                                                                                                                                                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Research chat          | Use native CopilotKit chat, streaming answers, expandable tool calls, provider-supplied reasoning and contextual follow-up questions. Explore 18 concrete finance workflow examples; selecting one fills a draft for you to edit and send.                            |
+| Single-stock research  | Choose a symbol, market, information cutoff date, depth and analysts. Run multiple independent tasks. Select fundamentals, technicals, news, sentiment, market and sector analysts, with bull/bear and risk review options.                                           |
+| Execution tracking     | Follow queue status, research stages and an estimated time remaining. Open the report or ask questions bound to that specific research. Estimates are approximate, not completion guarantees.                                                                         |
+| Report library         | Search and filter saved research, inspect source IDs and publication times, ask report-specific questions, and export Markdown, JSON or PDF. Generation timestamps include minutes.                                                                                   |
+| Report comparison      | Compare one stock across dates, or two stocks in the same market on the same cutoff date. Align saved prices on common trading sessions, with 5/20/60-session windows and a first-close index of 100. No new model run is needed.                                     |
+| A-share closing review | Review a selected sample against a benchmark, volume ratios, limit-up/down and failed-breakout pools, streaks, next-day follow-through and recent industry distributions.                                                                                             |
+| Candidates and checks  | Keep observations and notes, reuse candidates in reviews and schedules, and save measurable next-trading-day conditions. While the service runs, pending checks are evaluated after the target close when data is available.                                          |
+| Scheduled research     | Draft market morning briefs, topic news roundups, watchlist move scans, filing trackers, weekly reviews or stock research. Presets fill forms; you create the schedule. Enable/disable, run now, inspect per-plan history, or delete records individually/in batches. |
+| AI and appearance      | Configure separate Qwen, DeepSeek and GLM profiles, test a greeting without saving, then save and activate. Switch English/Chinese and charcoal dark/fresh light themes. Responsive layouts support narrow screens.                                                   |
 
 ### Native CopilotKit, preserved
 
@@ -58,12 +58,12 @@ Inspector, native thread history and the Intelligence learning integration use y
 
 ## Data
 
-| Source | Current use | Coverage and limitations |
-| --- | --- | --- |
+| Source                                        | Current use                                                                                                       | Coverage and limitations                                                                                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Longbridge CLI](https://open.longbridge.com/) | Primary prices, daily bars, financial data, news, company announcements, community samples and exchange calendars | Supports configured HK, US, Shanghai, Shenzhen and Singapore research. Availability depends on your account, permissions and the endpoint's history window. |
-| Tencent Finance | Fallback unadjusted mainland daily bars | Used when supported Longbridge historical data is unavailable; the source is recorded. |
-| Eastmoney public data | A-share events, trading disclosures, share unlocks, shareholder dealings and closing market pools | Records are checked against dates; issuer announcement links are retained where verified. Pool counts use the source's definitions. |
-| Local calculations | Moving averages, RSI/MACD, volatility, relative performance, condition checks and report price alignment | Computed by code from retained data. Unadjusted prices can jump around corporate actions; price changes are not total investment returns. |
+| Tencent Finance                               | Fallback unadjusted mainland daily bars                                                                           | Used when supported Longbridge historical data is unavailable; the source is recorded.                                                                      |
+| Eastmoney public data                         | A-share events, trading disclosures, share unlocks, shareholder dealings and closing market pools                 | Records are checked against dates; issuer announcement links are retained where verified. Pool counts use the source's definitions.                         |
+| Local calculations                            | Moving averages, RSI/MACD, volatility, relative performance, condition checks and report price alignment          | Computed by code from retained data. Unadjusted prices can jump around corporate actions; price changes are not total investment returns.                   |
 
 ### Research boundaries
 
@@ -73,17 +73,15 @@ Inspector, native thread history and the Intelligence learning integration use y
 - Comparison charts use common dates with trades. Suspensions, missing dates and duplicate records are not forward-filled.
 - Historical filtering does **not** make this a complete point-in-time backtesting database. Evidence coverage is **not** model prediction accuracy.
 
-The [a-stock-data](https://github.com/simonlin1212/a-stock-data) project informed fallback-data ideas; its full endpoint catalog is not bundled into this application. Only the integrations implemented here are described above.
-
 ## Supported AI
 
 All three providers use OpenAI-compatible Chat Completions through the existing LangChain/OpenAI integration. Model names are editable: use a model available to your account.
 
-| Provider | Initial model choices | Base URL environment variable | API key environment variable |
-| --- | --- | --- | --- |
-| [DashScope Qwen](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope) | `qwen3.8-flash`, `qwen3.8-max` | `DASHSCOPE_BASE_URL` | `DASHSCOPE_API_KEY` |
-| [DeepSeek](https://api-docs.deepseek.com/) | `deepseek-flash`, `deepseek-v4-pro` | `DEEPSEEK_BASE_URL` | `DEEPSEEK_API_KEY` |
-| [GLM / Zhipu AI](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction) | `glm-5.3`, `glm-4.7`, `glm-4.7-FlashX` | `ZHIPU_BASE_URL` | `ZHIPU_API_KEY` |
+| Provider                                                                                                  | Initial model choices                        | Base URL environment variable | API key environment variable |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------------- | ---------------------------- |
+| [DashScope Qwen](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope) | `qwen3.8-flash`, `qwen3.8-max`           | `DASHSCOPE_BASE_URL`        | `DASHSCOPE_API_KEY`        |
+| [DeepSeek](https://api-docs.deepseek.com/)                                                                 | `deepseek-flash`, `deepseek-v4-pro`      | `DEEPSEEK_BASE_URL`         | `DEEPSEEK_API_KEY`         |
+| [GLM / Zhipu AI](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction)                            | `glm-5.3`, `glm-4.7`, `glm-4.7-FlashX` | `ZHIPU_BASE_URL`            | `ZHIPU_API_KEY`            |
 
 In **Settings → AI settings**:
 
@@ -214,7 +212,5 @@ docs/screenshots/   Actual interface previews
 ```
 
 ## Acknowledgments and license
-
-Built on [CopilotKit](https://github.com/CopilotKit/CopilotKit), [LangGraph](https://github.com/langchain-ai/langgraph) and [Next.js](https://github.com/vercel/next.js). Workflow and documentation organization were inspired by [Vibe AStock](https://github.com/simonlin1212/vibe-astock/blob/main/README_en.md) and [TradingAgents-astock](https://github.com/simonlin1212/TradingAgents-astock). Feature claims here describe this repository's own implementation.
 
 See [LICENSE](copilotkit-app/LICENSE). Market-data and model access remain subject to their providers' terms. Research output is for information and learning, not personalized investment advice.
