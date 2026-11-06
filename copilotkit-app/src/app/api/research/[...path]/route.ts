@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 
-// Only report/data operations; no generic URL proxy and no credential forwarding.
+// Fixed research/settings endpoints, including server-side provider configuration.
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
-  if (!/^(reports(?:\/[a-f0-9-]+(?:\/export\/(?:md|json|pdf))?)?|report-comparisons|status|market-review|market-sentiment|market-follow-through|market-industry-history|a-share-events|review-candidates(?:\/[0-9]{6}\.(?:SH|SZ))?|review-checks(?:\/[a-f0-9-]+(?:\/verify)?)?|followups|tasks(?:\/[a-f0-9-]+)?|schedules(?:\/[a-f0-9-]+(?:\/(?:run|history))?)?|settings(?:\/(?:ai|data))?)$/.test(path.join("/"))) {
+  if (!/^(reports(?:\/[a-f0-9-]+(?:\/export\/(?:md|json|pdf))?)?|report-comparisons|status|market-review|market-sentiment|market-follow-through|market-industry-history|a-share-events|review-candidates(?:\/[0-9]{6}\.(?:SH|SZ))?|review-checks(?:\/[a-f0-9-]+(?:\/verify)?)?|followups|tasks(?:\/[a-f0-9-]+)?|schedules(?:\/[a-f0-9-]+(?:\/(?:run|history))?)?|settings(?:\/(?:ai(?:\/test)?|data))?)$/.test(path.join("/"))) {
     return Response.json({ error: "Unknown research endpoint" }, { status: 404 });
   }
   const hasBody = request.method === "POST" || request.method === "PUT";

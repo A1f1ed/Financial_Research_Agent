@@ -1,11 +1,8 @@
-"""Build the agent's chat model from ``COPILOTKIT_AGENT_MODEL``.
+"""Build models from the active UI profile or initial environment configuration.
 
-``COPILOTKIT_AGENT_MODEL=<provider>:<model>`` (or ``<provider>/<model>``)
-overrides EVERY model site in this agent. When it is unset, each site falls
-back to its own default. Providers: ``openai``, ``anthropic``, ``google``
-(``gemini`` and ``google-gemini`` are aliases of ``google``). An
-OpenAI-compatible provider is ``openai:<its model id>`` plus
-``OPENAI_BASE_URL``, which the OpenAI client reads itself.
+Saved Qwen/DeepSeek/GLM profiles take precedence over COPILOTKIT_AGENT_MODEL.
+All use OpenAI-compatible Chat Completions with server-side credentials. The
+legacy <provider>:<model> parser remains available for non-UI integrations.
 """
 
 import os
@@ -14,11 +11,11 @@ import re
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
-from .preferences import read_setting
+from .preferences import profile_settings, provider_key, read_setting
 
 
 class QwenChatOpenAI(ChatOpenAI):
-    """Preserve provider-supplied reasoning deltas for the native AG-UI renderer.
+    """Preserve compatible providers' reasoning deltas for native AG-UI.
 
     Pinned langchain-openai drops DashScope's nonstandard reasoning_content.
     This adapter forwards that actual field; it never generates a reasoning log.
@@ -75,6 +72,25 @@ def parse_agent_model(value: str) -> tuple[str, str]:
     return provider, match.group(2)
 
 
+def compatible_model(settings: dict, api_key=None, **options) -> BaseChatModel:
+    provider = settings["provider"]
+    thinking = options.pop("enable_thinking", None)
+    options.update(temperature=settings["temperature"], timeout=settings["timeout"],
+                   # Let a fresh app start so its Settings page can accept a key.
+                   api_key=api_key or provider_key(provider) or "not-configured", base_url=settings["base_url"],
+                   use_responses_api=False)
+    if provider == "dashscope":
+        options["extra_body"] = {"enable_thinking": thinking if thinking is not None else
+                                 os.getenv("QWEN_ENABLE_THINKING", "true").lower() == "true"}
+    elif provider == "glm" and settings["model"].lower().startswith("glm-5.3"):
+        # GLM-5.3 rejects thinking=disabled; use its lowest supported effort.
+        options["reasoning_effort"] = "low" if thinking is False else "high"
+    else:
+        enabled = thinking if thinking is not None else True
+        options["extra_body"] = {"thinking": {"type": "enabled" if enabled else "disabled"}}
+    return QwenChatOpenAI(model=settings["model"], **options)
+
+
 def create_chat_model(default_spec: str, **openai_kwargs) -> BaseChatModel:
     """Build this site's chat model.
 
@@ -85,24 +101,12 @@ def create_chat_model(default_spec: str, **openai_kwargs) -> BaseChatModel:
     settings = read_setting("ai")
     spec = f"openai:{settings['model']}" if settings else (os.getenv("COPILOTKIT_AGENT_MODEL") or "").strip() or default_spec
     provider, model = parse_agent_model(spec)
+    if settings or (provider == "openai" and model.startswith(("qwen", "deepseek", "glm"))):
+        return compatible_model(profile_settings(), **openai_kwargs)
     kwargs = dict(openai_kwargs) if provider == "openai" else {}
     if settings:
         kwargs.update(temperature=settings["temperature"], timeout=settings["timeout"])
-    thinking_override = kwargs.pop("enable_thinking", None)
-    if provider == "openai" and model.startswith("qwen"):
-        kwargs.setdefault("temperature", 0)
-        kwargs.setdefault("timeout", 100)
-        # DashScope speaks Chat Completions. Keep credentials on the server and
-        # disable thinking for responsive UI/tool calls with standard messages.
-        kwargs.update(
-            api_key=os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("DASHSCOPE_BASE_URL") or os.getenv("OPENAI_BASE_URL")
-            or "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            extra_body={"enable_thinking": thinking_override if thinking_override is not None else
-                        os.getenv("QWEN_ENABLE_THINKING", "true").lower() == "true"},
-            use_responses_api=False,
-        )
-        return QwenChatOpenAI(model=model, **kwargs)
+    kwargs.pop("enable_thinking", None)
     return init_chat_model(
         model, model_provider=_LANGCHAIN_PROVIDERS[provider], **kwargs
     )

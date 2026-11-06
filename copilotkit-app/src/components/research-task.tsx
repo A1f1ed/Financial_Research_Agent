@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/hooks/use-language";
+
 import { useContext, useEffect, useRef, useState } from "react";
 import { Activity, ArrowUpRight, Check, Clock3, LoaderCircle, MessageSquare } from "lucide-react";
 import { CopilotChat, CopilotChatView, type CopilotChatViewProps, CopilotChatConfigurationProvider, useAgent } from "@copilotkit/react-core/v2";
@@ -34,6 +36,7 @@ function estimateRemaining(task: Progress) {
 }
 
 export function ResearchTask({ id, onReport }: { id: string; onReport: (id: string) => void }) {
+  const t = useT();
   const [task, setTask] = useState<Progress | null>(null);
   const [error, setError] = useState("");
   const [qaOpen, setQaOpen] = useState(false);
@@ -61,34 +64,34 @@ export function ResearchTask({ id, onReport }: { id: string; onReport: (id: stri
 
   const finished = task ? terminal.has(task.status) : false;
   const completed = task?.stages.filter(stage => stage.status === "complete" || stage.status === "failed").length ?? 0;
-  return <section ref={panel} className="finance-card task-progress" aria-label="当前研究进度">
+  return <section ref={panel} className="finance-card task-progress" aria-label={t("当前研究进度")}>
     <div className="workbench-item-head">
-      <div><span className="section-eyebrow">当前研究</span><h2>{task?.name ?? "正在读取任务…"}</h2></div>
-      {task && <span className={`status-badge ${task.status}`}>{task.status === "queued" ? "排队中" : STATUS_NAMES[task.status] ?? task.status}</span>}
+      <div><span className="section-eyebrow">{t("当前研究")}</span><h2>{t(task?.name ?? "正在读取任务…")}</h2></div>
+      {task && <span className={`status-badge ${task.status}`}>{t(task.status === "queued" ? "排队中" : STATUS_NAMES[task.status] ?? task.status)}</span>}
     </div>
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert">{t(error)}</p>}
     {task && <>
-      <p className="muted">{task.workflow ? task.config.market : task.config.symbol} · 截至 {task.config.as_of}</p>
-      {task.status === "queued" && <p role="status"><Clock3 size={15} /> 正在排队，进入运行后显示预计时间。</p>}
-      {task.status === "running" && <p role="status"><LoaderCircle className="spin" size={15} /> {task.stages.length
+      <p className="muted">{t(task.workflow ? task.config.market : task.config.symbol)}{t("· 截至")}{t(task.config.as_of)}</p>
+      {task.status === "queued" && <p role="status"><Clock3 size={15} />{t("正在排队，进入运行后显示预计时间。")}</p>}
+      {task.status === "running" && <p role="status"><LoaderCircle className="spin" size={15} /> {t(task.stages.length
         ? `预计剩余 ${estimateRemaining(task)} · 已处理 ${completed}/${task.stages.length} 个阶段`
-        : "正在准备研究流程…"}</p>}
-      {task.status === "running" && task.stages.length > 0 && <progress max={task.stages.length} value={completed} aria-label="研究进度" />}
+        : "正在准备研究流程…")}</p>}
+      {task.status === "running" && task.stages.length > 0 && <progress max={task.stages.length} value={completed} aria-label={t("研究进度")} />}
       {task.stages.length > 0 && <ol className="task-stage-list">
         {task.stages.map(stage => <li key={stage.id} data-status={stage.status}>
           <details>
-            <summary>{stage.status === "complete" ? <Check size={15} /> : stage.status === "running" ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}
-              <span>{STAGE_NAMES[stage.id] ?? stage.id}</span><small>{STATUS_NAMES[stage.status] ?? stage.status}</small>
+            <summary>{t(stage.status === "complete" ? <Check size={15} /> : stage.status === "running" ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />)}
+              <span>{t(STAGE_NAMES[stage.id] ?? stage.id)}</span><small>{t(STATUS_NAMES[stage.status] ?? stage.status)}</small>
             </summary>
-            <p>{stage.detail || STATUS_NAMES[stage.status]}</p>
+            <p>{t(stage.detail || STATUS_NAMES[stage.status])}</p>
           </details>
         </li>)}
       </ol>}
-      {task.error && <p role="alert">{task.error}</p>}
+      {task.error && <p role="alert">{t(task.error)}</p>}
       {task.report_id && <div className="workbench-actions">
-        <button className="chat-config-toggle" onClick={() => onReport(task.report_id!)}>查看报告与证据 <ArrowUpRight size={15} /></button>
+        <button className="chat-config-toggle" onClick={() => onReport(task.report_id!)}>{t("查看报告与证据")}<ArrowUpRight size={15} /></button>
         {finished && task.has_assessment && <button className="primary-button" aria-expanded={qaOpen} onClick={() => setQaOpen(open => !open)}>
-          <MessageSquare size={16} />{qaOpen ? "收起问答" : "就此研究提问"}
+          <MessageSquare size={16} />{t(qaOpen ? "收起问答" : "就此研究提问")}
         </button>}
       </div>}
       {qaOpen && task.report_id && <ReportQA key={task.report_id} id={task.report_id} symbol={task.workflow ? task.name : task.config.symbol} />}
@@ -113,6 +116,7 @@ function ReportChatView(props: CopilotChatViewProps) {
 }
 
 function ReportChat({ id, agentId, symbol }: { id: string; agentId: string; symbol: string }) {
+  const t = useT();
   const { agent, isReady } = useAgent({ agentId, threadId: id, runtimeAgentId: "default" });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -144,9 +148,9 @@ function ReportChat({ id, agentId, symbol }: { id: string; agentId: string; symb
     return () => { controller.abort(); subscription.unsubscribe(); };
   }, [agent, id, isReady, retry]);
   return <div ref={panel} className="report-qa">
-    <h3>{symbol} · 报告问答</h3>
-    {error && <p role="alert">{error} <button className="chat-config-toggle" onClick={() => { setError(""); setRetry(value => value + 1); }}>重试</button></p>}
-    {!ready && !error && <p role="status">正在载入报告问答…</p>}
+    <h3>{t(symbol)}{t("· 报告问答")}</h3>
+    {error && <p role="alert">{t(error)} <button className="chat-config-toggle" onClick={() => { setError(""); setRetry(value => value + 1); }}>{t("重试")}</button></p>}
+    {!ready && !error && <p role="status">{t("正在载入报告问答…")}</p>}
     {ready && <div className="report-qa-chat">
       <FollowupContext.Provider value={{ agent, threadId: id, reportId: id }}>
       <CopilotChat agentId={agentId} threadId={id} chatView={ReportChatView}
@@ -162,9 +166,9 @@ function ReportChat({ id, agentId, symbol }: { id: string; agentId: string; symb
             return { type: "data", value: btoa(Array.from(data, byte => String.fromCharCode(byte)).join("")), mimeType };
           },
         }}
-        labels={{ welcomeMessageText: "这份研究还有哪些值得追问？", chatInputPlaceholder: "例如：报告里哪些证据支持这个结论？", chatInputToolbarAddButtonLabel: "添加附件", chatDisclaimerText: "支持 TXT、Markdown、CSV（64 KB 内），请结合原始来源核对结论。" }} />
+        labels={{ welcomeMessageText: t("这份研究还有哪些值得追问？"), chatInputPlaceholder: t("例如：报告里哪些证据支持这个结论？"), chatInputToolbarAddButtonLabel: t("添加附件"), chatDisclaimerText: t("支持 TXT、Markdown、CSV（64 KB 内），请结合原始来源核对结论。") }} />
       </FollowupContext.Provider>
     </div>}
-    {attachmentError && <p role="alert">{attachmentError}</p>}
+    {attachmentError && <p role="alert">{t(attachmentError)}</p>}
   </div>;
 }

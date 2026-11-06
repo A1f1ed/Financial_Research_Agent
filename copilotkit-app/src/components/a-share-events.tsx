@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/hooks/use-language";
+
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, LoaderCircle } from "lucide-react";
 import { researchRequest } from "./workbench-panels";
@@ -18,6 +20,7 @@ type Event = {
 const eventFilters = { all: "全部", billboard: "龙虎榜", unlock: "限售解禁", holder_change: "股东增减持" } as const;
 
 export function AShareEvents({ symbol, asOf }: { symbol: string; asOf: string }) {
+  const t = useT();
   const [result, setResult] = useState<{ events: Event[]; gaps: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -44,34 +47,32 @@ export function AShareEvents({ symbol, asOf }: { symbol: string; asOf: string })
   }
 
   const events = result?.events.filter(event => filter === "all" || event.kind === filter) ?? [];
-  return <section className="finance-card a-share-events" aria-label="A 股专属事件">
-    <div className="workbench-item-head"><h2>A 股专属事件</h2><span className="status-badge">只读证据</span></div>
-    <p className="muted">{symbol} · 截至 {asOf}。查看近 30 天龙虎榜、近一年披露的股东增减持和限售解禁，以及有公告佐证的未来 90 天解禁。</p>
+  return <section className="finance-card a-share-events" aria-label={t("A 股专属事件")}>
+    <div className="workbench-item-head"><h2>{t("A 股专属事件")}</h2><span className="status-badge">{t("只读证据")}</span></div>
+    <p className="muted">{t(symbol)}{t("· 截至")}{t(asOf)}{t("。查看近 30 天龙虎榜、近一年披露的股东增减持和限售解禁，以及有公告佐证的未来 90 天解禁。")}</p>
     <button type="button" className="chat-config-toggle" disabled={busy || !asOf} onClick={() => void preview()}>
-      {busy && <LoaderCircle size={15} className="spin" />}{busy ? "核对事件…" : result ? "刷新事件" : "查看 A 股事件"}
+      {busy && <LoaderCircle size={15} className="spin" />}{t(busy ? "核对事件…" : result ? "刷新事件" : "查看 A 股事件")}
     </button>
-    {error && <p className="error-banner" role="alert">{error}</p>}
-    {busy && !result && <p className="muted" role="status">正在核对交易日与公告。</p>}
+    {error && <p className="error-banner" role="alert">{t(error)}</p>}
+    {busy && !result && <p className="muted" role="status">{t("正在核对交易日与公告。")}</p>}
     {result && <div aria-busy={busy}>
-      <div className="event-filters" role="group" aria-label="筛选 A 股事件">
+      <div className="event-filters" role="group" aria-label={t("筛选 A 股事件")}>
         {Object.entries(eventFilters).map(([key, label]) => <button key={key} type="button" className="chat-config-toggle"
-          aria-pressed={filter === key} onClick={() => setFilter(key as keyof typeof eventFilters)}>{label}</button>)}
+          aria-pressed={filter === key} onClick={() => setFilter(key as keyof typeof eventFilters)}>{t(label)}</button>)}
       </div>
-      {events.some(event => event.kind === "holder_change") && <p className="field-note">
-        股东增减持可能分阶段披露，股数应逐条查看。核对成功的记录另附发行人公告。
-      </p>}
-      {!events.length && <p className="muted" role="status">查询窗口内暂无符合校验的{filter === "all" ? "事件" : eventFilters[filter]}记录。</p>}
+      {events.some(event => event.kind === "holder_change") && <p className="field-note">{t("股东增减持可能分阶段披露，股数应逐条查看。核对成功的记录另附发行人公告。")}</p>}
+      {!events.length && <p className="muted" role="status">{t("查询窗口内暂无符合校验的")}{t(filter === "all" ? "事件" : eventFilters[filter])}{t("记录。")}</p>}
       {!!events.length && <ul className="review-checks">
         {events.map((event, index) => <li key={`${event.kind}:${event.date}:${index}`}>
-          <div className="workbench-item-head"><strong>{event.date} · {event.title}</strong><span className="status-badge">{event.state}</span></div>
-          <p>{event.description}</p><p className="muted">{event.kind === "holder_change" ? `公告日 ${event.published_at}` : event.note}</p>
+          <div className="workbench-item-head"><strong>{t(event.date)} · {t(event.title)}</strong><span className="status-badge">{t(event.state)}</span></div>
+          <p>{t(event.description)}</p><p className="muted">{t(event.kind === "holder_change" ? `公告日 ${event.published_at}` : event.note)}</p>
           <div className="event-links">
-            <a href={event.url} target="_blank" rel="noreferrer">{event.provider}原始记录 <ArrowUpRight size={12} /></a>
-            {event.filing_url && <a href={event.filing_url} target="_blank" rel="noreferrer">{event.kind === "holder_change" ? "发行人公告" : `公告 · ${event.published_at}`} <ArrowUpRight size={12} /></a>}
+            <a href={event.url} target="_blank" rel="noreferrer">{t(event.provider)}{t("原始记录")}<ArrowUpRight size={12} /></a>
+            {event.filing_url && <a href={event.filing_url} target="_blank" rel="noreferrer">{t(event.kind === "holder_change" ? "发行人公告" : `公告 · ${event.published_at}`)} <ArrowUpRight size={12} /></a>}
           </div>
         </li>)}
       </ul>}
-      {!!result.gaps.length && <details><summary>覆盖说明（{result.gaps.length}）</summary><ul>{result.gaps.map(gap => <li key={gap}>{gap}</li>)}</ul></details>}
+      {!!result.gaps.length && <details><summary>{t("覆盖说明（")}{t(result.gaps.length)}）</summary><ul>{result.gaps.map(gap => <li key={gap}>{t(gap)}</li>)}</ul></details>}
     </div>}
   </section>;
 }

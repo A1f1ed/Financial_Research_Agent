@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/hooks/use-language";
+
 import { useState, type FormEvent } from "react";
 import { ArrowUpRight, Bookmark } from "lucide-react";
 import { researchRequest, useResearchList } from "./workbench-panels";
@@ -26,6 +28,7 @@ export function CandidateButton({ scope, candidates }: {
   scope: CandidateScope;
   candidates: ReturnType<typeof useReviewCandidates>;
 }) {
+  const t = useT();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const candidate = candidates.items.find(item => item.symbol === scope.symbol);
@@ -47,8 +50,8 @@ export function CandidateButton({ scope, candidates }: {
 
   return <div className="candidate-add">
     <button type="button" className="chat-config-toggle" disabled={saving || saved}
-      onClick={() => void add()}>{saved ? "已记录观察" : saving ? "正在记录…" : candidate ? "记录本次观察" : "加入候选池"}</button>
-    {error && <small role="alert" className="candidate-error">{error}</small>}
+      onClick={() => void add()}>{t(saved ? "已记录观察" : saving ? "正在记录…" : candidate ? "记录本次观察" : "加入候选池")}</button>
+    {error && <small role="alert" className="candidate-error">{t(error)}</small>}
   </div>;
 }
 
@@ -61,6 +64,7 @@ export function ReviewCandidates({ items, loading, loadError, refresh, onFill, o
   onResearch: (symbol: string, session: string, benchmark: string) => void;
   onOpenReport: (id: string) => void;
 }) {
+  const t = useT();
   const [selected, setSelected] = useState<string[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -94,20 +98,19 @@ export function ReviewCandidates({ items, loading, loadError, refresh, onFill, o
   }
 
   return <details className="finance-card review-candidates">
-    <summary><Bookmark size={16} aria-hidden="true" /> <strong>研究候选池</strong> <span className="status-badge">{items.length} 个标的</span></summary>
-    <p className="field-note">从复盘或单股报告记录观察。勾选最多 8 个标的填入样本，确认日期和基准后再运行。</p>
-    {loading && <p role="status" className="muted">正在读取候选池…</p>}
-    {loadError && <div className="workbench-actions candidate-actions"><p className="muted">候选池读取失败。</p>
-      <button type="button" className="chat-config-toggle" onClick={() => void refresh()}>重试读取</button>
+    <summary><Bookmark size={16} aria-hidden="true" /> <strong>{t("研究候选池")}</strong> <span className="status-badge">{t(items.length)}{t("个标的")}</span></summary>
+    <p className="field-note">{t("从复盘或单股报告记录观察。勾选最多 8 个标的填入样本，确认日期和基准后再运行。")}</p>
+    {loading && <p role="status" className="muted">{t("正在读取候选池…")}</p>}
+    {loadError && <div className="workbench-actions candidate-actions"><p className="muted">{t("候选池读取失败。")}</p>
+      <button type="button" className="chat-config-toggle" onClick={() => void refresh()}>{t("重试读取")}</button>
     </div>}
-    {!loading && !loadError && !items.length && <p className="muted">还没有候选。先查看一次收盘复盘，即可从有效样本添加。</p>}
+    {!loading && !loadError && !items.length && <p className="muted">{t("还没有候选。先查看一次收盘复盘，即可从有效样本添加。")}</p>}
     {!!items.length && <>
       <div className="workbench-actions candidate-actions">
         <button type="button" className="chat-config-toggle" disabled={!sample.length || pending}
-          onClick={() => { onFill(sample); setNotice(`已填入 ${sample.length} 个标的，可以调整日期和基准后查看复盘。`); }}>
-          填入复盘样本（{sample.length}/8）
+          onClick={() => { onFill(sample); setNotice(`已填入 ${sample.length} 个标的，可以调整日期和基准后查看复盘。`); }}>{t("填入复盘样本（")}{t(sample.length)}/8）
         </button>
-        {!!sample.length && <button type="button" className="chat-config-toggle" onClick={() => setSelected([])}>清除选择</button>}
+        {!!sample.length && <button type="button" className="chat-config-toggle" onClick={() => setSelected([])}>{t("清除选择")}</button>}
       </div>
       <ul className="review-checks">
         {items.map(item => <li key={item.symbol}>
@@ -115,57 +118,57 @@ export function ReviewCandidates({ items, loading, loadError, refresh, onFill, o
             <input type="checkbox" checked={selected.includes(item.symbol)}
               disabled={sample.length >= 8 && !selected.includes(item.symbol)}
               onChange={event => setSelected(previous => event.target.checked ? [...previous, item.symbol] : previous.filter(value => value !== item.symbol))} />
-            <strong>{item.symbol}</strong>
+            <strong>{t(item.symbol)}</strong>
           </label>
-          <p className="muted">首次观察 {item.session} · 基准 {item.benchmark}</p>
-          {item.note && editing !== item.symbol && <p className="candidate-note">{item.note}</p>}
+          <p className="muted">{t("首次观察")}{t(item.session)}{t("· 基准")}{t(item.benchmark)}</p>
+          {item.note && editing !== item.symbol && <p className="candidate-note">{t(item.note)}</p>}
           <div className="workbench-actions candidate-actions">
-            <button type="button" className="chat-config-toggle" onClick={() => onResearch(item.symbol, item.session, item.benchmark)}>按首次观察日研究</button>
+            <button type="button" className="chat-config-toggle" onClick={() => onResearch(item.symbol, item.session, item.benchmark)}>{t("按首次观察日研究")}</button>
             <button type="button" className="chat-config-toggle" disabled={pending} aria-expanded={editing === item.symbol}
               onClick={() => { setEditing(editing === item.symbol ? null : item.symbol); setRemoving(null); }}>
-              {item.note ? "编辑备注" : "添加备注"}
+              {t(item.note ? "编辑备注" : "添加备注")}
             </button>
             <button type="button" className="chat-config-toggle danger-button" disabled={pending} aria-expanded={removing === item.symbol}
-              aria-label={`移出 ${item.symbol}`}
-              onClick={() => { setRemoving(removing === item.symbol ? null : item.symbol); setEditing(null); }}>移出</button>
+              aria-label={t(`移出 ${item.symbol}`)}
+              onClick={() => { setRemoving(removing === item.symbol ? null : item.symbol); setEditing(null); }}>{t("移出")}</button>
           </div>
           <details className="candidate-history">
-            <summary>观察历史（{item.observations.length}）</summary>
+            <summary>{t("观察历史（")}{t(item.observations.length)}）</summary>
             <ul className="candidate-observations">
               {item.observations.map(observation => <li key={`${observation.session}:${observation.benchmark}:${observation.origin}:${observation.report_id ?? ""}`}>
-                <p><strong>{observation.session}</strong> · {observationLabels[observation.origin]}</p>
-                <p className="muted">基准 {observation.benchmark}</p>
+                <p><strong>{t(observation.session)}</strong> · {t(observationLabels[observation.origin])}</p>
+                <p className="muted">{t("基准")}{t(observation.benchmark)}</p>
                 <div className="candidate-observation-actions">
                   <button type="button" className="chat-config-toggle"
-                    onClick={() => onResearch(item.symbol, observation.session, observation.benchmark)}>按观察日研究</button>
+                    onClick={() => onResearch(item.symbol, observation.session, observation.benchmark)}>{t("按观察日研究")}</button>
                   {observation.source_url && <a className="source-link" href={observation.source_url}
-                    target="_blank" rel="noreferrer">打开原始行情池 <ArrowUpRight size={12} /></a>}
-                  {observation.report_id && (observation.report_available
-                    ? <button type="button" className="chat-config-toggle" onClick={() => onOpenReport(observation.report_id!)}>查看来源报告</button>
-                    : <small className="muted">来源报告已归档或不可用</small>)}
+                    target="_blank" rel="noreferrer">{t("打开原始行情池")}<ArrowUpRight size={12} /></a>}
+                  {t(observation.report_id && (observation.report_available
+                    ? <button type="button" className="chat-config-toggle" onClick={() => onOpenReport(observation.report_id!)}>{t("查看来源报告")}</button>
+                    : <small className="muted">{t("来源报告已归档或不可用")}</small>))}
                 </div>
               </li>)}
             </ul>
           </details>
           {editing === item.symbol && <form className="review-check-form candidate-editor" onSubmit={event => submitNote(event, item.symbol)}>
-            <label>观察备注<textarea name="note" maxLength={280} rows={2} defaultValue={item.note} disabled={pending} /></label>
+            <label>{t("观察备注")}<textarea name="note" maxLength={280} rows={2} defaultValue={item.note} disabled={pending} /></label>
             <div className="workbench-actions candidate-actions">
-              <button type="submit" className="chat-config-toggle" disabled={pending}>{pending ? "保存中…" : "保存备注"}</button>
-              <button type="button" className="chat-config-toggle" disabled={pending} onClick={() => setEditing(null)}>取消</button>
+              <button type="submit" className="chat-config-toggle" disabled={pending}>{t(pending ? "保存中…" : "保存备注")}</button>
+              <button type="button" className="chat-config-toggle" disabled={pending} onClick={() => setEditing(null)}>{t("取消")}</button>
             </div>
           </form>}
-          {removing === item.symbol && <div className="delete-confirmation" role="group" aria-label="移出确认">
-            <p>移出 {item.symbol} 会删除候选、备注和全部观察记录。</p>
+          {removing === item.symbol && <div className="delete-confirmation" role="group" aria-label={t("移出确认")}>
+            <p>{t("移出")}{t(item.symbol)}{t("会删除候选、备注和全部观察记录。")}</p>
             <div className="workbench-actions candidate-actions">
               <button type="button" className="chat-config-toggle danger-button danger-confirm" disabled={pending}
-                onClick={() => void save(item.symbol, "DELETE")}>{pending ? "移出中…" : "确认移出"}</button>
-              <button type="button" className="chat-config-toggle" disabled={pending} onClick={() => setRemoving(null)}>取消</button>
+                onClick={() => void save(item.symbol, "DELETE")}>{t(pending ? "移出中…" : "确认移出")}</button>
+              <button type="button" className="chat-config-toggle" disabled={pending} onClick={() => setRemoving(null)}>{t("取消")}</button>
             </div>
           </div>}
         </li>)}
       </ul>
     </>}
-    {error && <p role="alert" className="error-banner">{error}</p>}
-    {notice && <p role="status" className="muted">{notice}</p>}
+    {error && <p role="alert" className="error-banner">{t(error)}</p>}
+    {notice && <p role="status" className="muted">{t(notice)}</p>}
   </details>;
 }

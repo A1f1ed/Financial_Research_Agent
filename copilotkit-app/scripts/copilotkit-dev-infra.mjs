@@ -7,14 +7,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 
 /** Vendor API keys this scaffold needs before chat and generations will work. */
-const REQUIRED_ENV_KEYS = [
-  {
-    "key": "DASHSCOPE_API_KEY",
-    "note": "Required by the configured Qwen agent.",
-    "url": "https://bailian.console.aliyun.com/",
-    "example": "<your DashScope key>"
-  }
-];
+const REQUIRED_ENV_KEYS = ["DASHSCOPE_API_KEY", "DEEPSEEK_API_KEY", "ZHIPU_API_KEY", "GLM_API_KEY", "ZAI_API_KEY", "OPENAI_API_KEY"].map(key => ({ key }));
 
 /**
  * Hosted CopilotKit Intelligence env var NAMES this scaffold was generated with
@@ -89,30 +82,8 @@ function findUnsatisfiedVendorKeys(processEnv, envFileContent, requirements) {
 const failedKeys = findUnsatisfiedVendorKeys(process.env, envFileContent, REQUIRED_ENV_KEYS)
   .map(({ requirement, value }) => ({ entry: requirement, value }));
 
-if (failedKeys.length > 0) {
-  for (const { entry, value } of failedKeys) {
-    if (value === '') {
-      console.warn(
-        `⚠ Missing API key: ${entry.key} — chat and generations will not work until you set it.`,
-      );
-    } else {
-      console.warn(
-        `⚠ Placeholder value for API key: ${entry.key} — chat and generations will not work until you replace it with your real key.`,
-      );
-    }
-    console.warn(`  ${entry.note}`);
-    console.warn(`  Get a key:  ${entry.url}`);
-    console.warn(`  Add to .env:  ${entry.key}=${entry.example}`);
-    console.warn('');
-  }
-  if (!envFileExists) {
-    console.warn(
-      'No .env file found in this directory; create one containing the line(s) above.',
-    );
-  }
-  console.warn(
-    'Starting the dev server anyway — set the key(s) above and restart to enable chat.',
-  );
+if (failedKeys.length === REQUIRED_ENV_KEYS.length) {
+  console.warn('No AI provider key detected. The app will start; configure a key in Settings > AI settings, then save and test it.');
 }
 
 // Hosted Intelligence config check (ENT-949). Reuses the shared predicate above:

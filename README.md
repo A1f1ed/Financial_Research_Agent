@@ -1,130 +1,220 @@
 # Aperture · Finance Research Agent
 
-基于 **CopilotKit + Next.js + LangGraph / FastAPI + Qwen** 的金融研究工作台。把研究配置、执行过程、报告、来源证据和后续问答接在同一条工作流里。
+**English** | [简体中文](README_zh-CN.md)
 
-主应用位于 [copilotkit-app](copilotkit-app/)。仓库根目录不再保留旧工作台或手工前端。
+An evidence-first financial research workspace built with **CopilotKit, Next.js, LangGraph and FastAPI**.
 
-当前版本：**v0.1.1**。面向单用户本机运行，市场数据与模型使用自己的授权；当前没有部署公网服务。
+Configure a research team, follow its tool activity, inspect the sources behind a report, and keep asking questions in the report's own context. Bring your own Qwen, DeepSeek or GLM API connection.
 
-## 可以做什么
+[Interface previews](#interface-previews) · [Features](#features) · [Data](#data) · [Supported AI](#supported-ai) · [Quick start](#quick-start) · [Architecture](#architecture) · [Development](#development)
 
-| 场景 | 当前能力 |
+> Current scope: a single-user application running on your own machine. Public SaaS authentication, tenant isolation and billing are not implemented. The application performs read-only research; it does not place trades or access brokerage positions.
+
+## Interface previews
+
+Actual screenshots of the local application, with public-market research used as examples. The interface defaults to English; **EN / 中文** beside the theme button switches languages and remembers the choice. Saved reports and conversations keep their original language.
+
+### Research chat
+
+![English research chat and finance workflow examples](docs/screenshots/chat-light.jpg)
+
+### Research configuration
+
+![Research target, information cutoff, market and depth](docs/screenshots/research-dark.jpg)
+
+### Report and evidence
+
+![Research report with native progress stages and source citations](docs/screenshots/report-light.jpg)
+
+### Connect your AI
+
+![Provider selection, masked credentials, and connection test feedback](docs/screenshots/ai-settings-dark.jpg)
+
+Connection-test feedback:
+
+![Successful greeting test with response and elapsed time](docs/screenshots/ai-test-feedback-dark.jpg)
+
+These screenshots illustrate the interface, not a model accuracy claim or an investment recommendation. Existing research may be in Chinese even when the interface is English.
+
+## Features
+
+| Workflow | What you can do |
 | --- | --- |
-| 自由对话 | 原生 CopilotKit 聊天、流式回答、工具卡、模型返回的推理内容、上下文动态追问。建议点击后填入输入框，由用户发送。 |
-| 单股研究 | 自选证券、市场和截止日期；六类分析师可选，支持快速、标准、深度研究，多空审查、风险审查与任务进度。可同时提交多个任务。 |
-| 报告与证据 | 报告库检索、状态筛选、分钟级生成时间、报告问答、证据引用回链，以及 Markdown / JSON / 中文 PDF 导出。 |
-| 研究对照 | 同股跨日期回看；同市场、同截止日的双标的横向对照（沪深可互比）。价格按共同成交日对齐，支持 5/20/60 日窗口、首日设为 100 的曲线和逐日数值；各份报告的证据独立绑定。 |
-| A 股收盘复盘 | 同交易日样本、相对基准变化、量能、涨停/炸板/跌停、连板梯队、昨涨停股次日表现及近五日行业样本走势。 |
-| 候选与条件核对 | 候选池、备注、观察历史与报告回链；按价格变化、相对基准和量比条件逐项核对样本，保存下一交易日复核条件。 |
-| 定时任务 | 市场晨报、主题要闻、自选异动、公告追踪、周复盘与单股研究。支持预设草稿、启停、立即运行、独立历史、删除和批量操作。 |
-| 数据与 AI 设置 | Qwen / 兼容模型配置、只读数据源设置、本机 SQLite 持久化、黑灰深色与清新白色主题、手机布局。 |
+| Research chat | Use native CopilotKit chat, streaming answers, expandable tool calls, provider-supplied reasoning and contextual follow-up questions. Explore 18 concrete finance workflow examples; selecting one fills a draft for you to edit and send. |
+| Single-stock research | Choose a symbol, market, information cutoff date, depth and analysts. Run multiple independent tasks. Select fundamentals, technicals, news, sentiment, market and sector analysts, with bull/bear and risk review options. |
+| Execution tracking | Follow queue status, research stages and an estimated time remaining. Open the report or ask questions bound to that specific research. Estimates are approximate, not completion guarantees. |
+| Report library | Search and filter saved research, inspect source IDs and publication times, ask report-specific questions, and export Markdown, JSON or PDF. Generation timestamps include minutes. |
+| Report comparison | Compare one stock across dates, or two stocks in the same market on the same cutoff date. Align saved prices on common trading sessions, with 5/20/60-session windows and a first-close index of 100. No new model run is needed. |
+| A-share closing review | Review a selected sample against a benchmark, volume ratios, limit-up/down and failed-breakout pools, streaks, next-day follow-through and recent industry distributions. |
+| Candidates and checks | Keep observations and notes, reuse candidates in reviews and schedules, and save measurable next-trading-day conditions. While the service runs, pending checks are evaluated after the target close when data is available. |
+| Scheduled research | Draft market morning briefs, topic news roundups, watchlist move scans, filing trackers, weekly reviews or stock research. Presets fill forms; you create the schedule. Enable/disable, run now, inspect per-plan history, or delete records individually/in batches. |
+| AI and appearance | Configure separate Qwen, DeepSeek and GLM profiles, test a greeting without saving, then save and activate. Switch English/Chinese and charcoal dark/fresh light themes. Responsive layouts support narrow screens. |
 
-保留 **CopilotChat、原生工具渲染、Generative UI、AG-UI Streams、Shared State、Frontend Tools、Human in the Loop、Inspector 和 CopilotKit Intelligence 学习接入**。通用原生能力示例保留在 `/playground`。Automatic Learning 是技能提炼和审核发布流程，不代表自动训练模型。
+### Native CopilotKit, preserved
 
-## 架构
+The workbench retains **CopilotChat, native tool cards, AG-UI streaming, Generative UI, Shared State, Frontend Tools and Human in the Loop**. It does not fabricate tool activity or reasoning logs.
 
-```mermaid
-flowchart TD
-    UI[Next.js 研究工作台与原生 CopilotChat] <--> Runtime[CopilotKit Runtime]
-    Runtime <--> Intelligence[CopilotKit Intelligence · 线程 / Inspector / 学习]
-    Runtime <-->|AG-UI 流式事件与共享状态| Agent[FastAPI + LangGraph]
-    UI <-->|白名单研究 API| Agent
-    Agent --> Research[证据采集 → 专业分析师 → 多空 / 风险审查 → 报告]
-    Research --> Model[Qwen / 配置的模型]
-    Research --> Data[只读市场数据 · 日期过滤 · Python 指标]
-    Agent <--> Store[本机 SQLite · 报告 / 任务 / 计划 / Checkpoint]
-```
+Inspector, native thread history and the Intelligence learning integration use your configured **CopilotKit Intelligence** connection. Automatic Learning here means skill extraction and review/publishing, not automatic model training. Upstream integration demonstrations remain at `/playground`.
 
-模型负责解释和研究意见；技术指标、条件核对、调度和双报告价格对齐由代码计算。报告对照仅读取保存的报告，不重新调用模型或补取最新行情。
+## Data
 
-## 快速开始
+| Source | Current use | Coverage and limitations |
+| --- | --- | --- |
+| [Longbridge CLI](https://open.longbridge.com/) | Primary prices, daily bars, financial data, news, company announcements, community samples and exchange calendars | Supports configured HK, US, Shanghai, Shenzhen and Singapore research. Availability depends on your account, permissions and the endpoint's history window. |
+| Tencent Finance | Fallback unadjusted mainland daily bars | Used when supported Longbridge historical data is unavailable; the source is recorded. |
+| Eastmoney public data | A-share events, trading disclosures, share unlocks, shareholder dealings and closing market pools | Records are checked against dates; issuer announcement links are retained where verified. Pool counts use the source's definitions. |
+| Local calculations | Moving averages, RSI/MACD, volatility, relative performance, condition checks and report price alignment | Computed by code from retained data. Unadjusted prices can jump around corporate actions; price changes are not total investment returns. |
 
-需要 Node.js 20.19+、Python 3.12+、[uv](https://docs.astral.sh/uv/getting-started/installation/) 和已授权的 [Longbridge CLI](https://open.longbridge.com)。
+### Research boundaries
+
+- Users choose the information cutoff. Later-dated or unverifiably dated evidence is excluded; a non-trading date uses the preceding available session.
+- A reporting period's end is not its publication date. Missing statements or valuation inputs remain explicit gaps; they are not filled with invented numbers or price targets.
+- A rolling news endpoint may not cover a distant historical date. An empty response does not establish that no event occurred.
+- Comparison charts use common dates with trades. Suspensions, missing dates and duplicate records are not forward-filled.
+- Historical filtering does **not** make this a complete point-in-time backtesting database. Evidence coverage is **not** model prediction accuracy.
+
+The [a-stock-data](https://github.com/simonlin1212/a-stock-data) project informed fallback-data ideas; its full endpoint catalog is not bundled into this application. Only the integrations implemented here are described above.
+
+## Supported AI
+
+All three providers use OpenAI-compatible Chat Completions through the existing LangChain/OpenAI integration. Model names are editable: use a model available to your account.
+
+| Provider | Initial model choices | Base URL environment variable | API key environment variable |
+| --- | --- | --- | --- |
+| [DashScope Qwen](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope) | `qwen3.8-flash`, `qwen3.8-max` | `DASHSCOPE_BASE_URL` | `DASHSCOPE_API_KEY` |
+| [DeepSeek](https://api-docs.deepseek.com/) | `deepseek-flash`, `deepseek-v4-pro` | `DEEPSEEK_BASE_URL` | `DEEPSEEK_API_KEY` |
+| [GLM / Zhipu AI](https://docs.bigmodel.cn/cn/guide/develop/openai/introduction) | `glm-5.3`, `glm-4.7`, `glm-4.7-FlashX` | `ZHIPU_BASE_URL` | `ZHIPU_API_KEY` |
+
+In **Settings → AI settings**:
+
+1. Select a provider. Each provider retains its own model, endpoint and generation settings. Existing `.env` base URLs and keys are used for fresh profiles.
+2. Enter a model name, Base URL and optionally a replacement API key. A blank key keeps the configured key; saved keys are never sent back to the browser.
+3. Select **Test connection**. It sends a short Chinese greeting using the current form, with no research tools, and shows success/reply/timing or a failure reason. It does not save or activate the draft. Tests wait at most 20 seconds.
+4. Select **Save & activate** to apply the profile to subsequent chat, research and follow-up model calls. It does not restart a completed research task.
+
+Keys entered in settings are written to the local server's ignored `copilotkit-app/.env`. Non-secret provider profiles are saved in SQLite. GLM aliases `GLM_API_KEY`, `ZAI_API_KEY`, `ZHIPUAI_API_KEY`, `GLM_BASE_URL` and `ZAI_BASE_URL` are also recognized; `ZHIPU_*` takes precedence. Provider-specific reasoning differences are handled by the adapter; for example, GLM-5.3 requires reasoning and uses low effort for the greeting test.
+
+A greeting verifies basic authentication and generation, not every model's tool-calling, structured output or research quality. API availability and account access can change.
+
+## Quick start
+
+### 1. Install prerequisites
+
+- **Node.js 20.19+** and npm
+- **Python 3.12+** and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- An API key for at least one supported AI provider
+- An installed and authorized [Longbridge CLI](https://open.longbridge.com/) for the primary market-data integration
+
+### 2. Clone and prepare the app
 
 ```powershell
 git clone git@github.com:A1f1ed/Financial_Research_Agent.git
 cd Financial_Research_Agent/copilotkit-app
-# 新克隆时创建配置文件；已有 .env 时保留原配置
+# On a fresh clone only; keep an existing .env intact.
 Copy-Item .env.example .env
 npm ci
 ```
 
-`npm ci` 会通过 uv 安装 Python 依赖。在项目目录 `.env` 中填写服务端配置：
+`npm ci` also installs the Python agent dependencies using uv. Use your own credentials; the repository does not include keys, databases or model caches.
+
+### 3. Configure connections
+
+You can enter the AI key in the settings page after starting, or populate the corresponding entries in `.env` beforehand:
 
 ```dotenv
-AGENT_URL=http://127.0.0.1:8123
-DASHSCOPE_API_KEY=<your-dashscope-key>
+DASHSCOPE_API_KEY=
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-COPILOTKIT_AGENT_MODEL=openai:qwen3.8-max
-QWEN_ENABLE_THINKING=true
-CPK_INTELLIGENCE_LEARNING_CONTAINER_ID=copilotkit-tasks
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+ZHIPU_API_KEY=
+ZHIPU_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+
+# Initial model until a profile is saved in settings:
+COPILOTKIT_AGENT_MODEL=openai:qwen3.8-flash
 ```
 
-原生线程、托管追踪和学习功能还需配置自己的 CopilotKit Intelligence：`CPK_INTELLIGENCE_API_KEY`、`INTELLIGENCE_API_URL`、`INTELLIGENCE_GATEWAY_WS_URL`。新增或修改线程开关配置后重新构建前端。密钥仅由服务端读取，不使用 `NEXT_PUBLIC_` 保存密钥。
+For native thread history, hosted tracing and learning, configure your own `CPK_INTELLIGENCE_API_KEY`, `INTELLIGENCE_API_URL` and `INTELLIGENCE_GATEWAY_WS_URL`. Rebuild the UI after changing integration flags. Without Intelligence, local reports/tasks/checkpoints remain separate from native free-chat thread discovery.
+
+Authorize market data on your machine:
 
 ```powershell
-# 使用自己的 Longbridge 授权
 longbridge auth login
-# 正式运行：同时启动 Next.js 与 FastAPI
+```
+
+### 4. Build and run
+
+```powershell
 npm run build
 npm run start:all
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。FastAPI 默认监听 `127.0.0.1:8123`。开发模式使用 `npm run dev`。
+Open **[http://localhost:3000](http://localhost:3000)**. FastAPI listens on `127.0.0.1:8123`. Select your AI provider, test it, then save and activate before research. Development mode: `npm run dev`.
 
-生产构建使用 Webpack，启动器补齐 Next.js standalone 静态文件并读取项目目录 `.env`。新克隆需自己安装 uv；工作区已有的 `.tools` 不随仓库发布。可通过 `LONGBRIDGE_CLI_PATH` 指定 CLI 路径，通过 `RESEARCH_DATA_DIR` 指定持久化数据目录。
+The production build uses Webpack. The launcher loads project `.env` and prepares Next.js standalone static assets. Use `LONGBRIDGE_CLI_PATH` for a custom CLI location and `RESEARCH_DATA_DIR` for a different data directory.
 
-## 一条完整的研究路径
+### 5. Follow a research through
 
-1. 在「单股分析」选择证券、截止日期、研究问题、深度与分析师，点击开始研究。
-2. 查看执行阶段和工具过程；运行或部分失败的结果会按任务保存。
-3. 在报告中点击 `[S编号]`，回到这份报告对应的来源，核对发布时间和数据缺口。
-4. 就当前报告问答，或从报告库选择两份记录对照；双标的需同市场和同截止日。
-5. 对沪深样本保存观察或验证条件，下一交易日收盘后复核；把自己的候选填入复盘或定时计划。
-6. 定时任务预设只填写草稿，点击创建后才保存；可先「立即运行」查看产出。
+1. Open **Stock research → Single-stock research**, set the target, cutoff, question and analyst scope, then start.
+2. Follow execution progress. Each stock analysis is its own task; other tasks can run independently.
+3. Read the report and select a `[S…]` citation to inspect the matching source.
+4. Ask a question about that report or compare saved reports in the library.
+5. Reuse candidates and conditions in a closing review or draft a schedule. Creating a schedule is always an explicit action.
 
-计划调度和条件自动核对依赖 FastAPI 持续运行，程序关闭期间不会执行任务。任务中心的任务记录、定时计划和报告库分别管理；移除任务不会自动删除报告。
+Schedulers and automatic checks need FastAPI to remain running. Removing a task or schedule does not automatically delete its saved reports.
 
-## 数据、持久化与边界
+## Architecture
 
-- Longbridge 为主要数据源。沪深日线可降级到腾讯财经；A 股专属事件和行情池使用东方财富，并保留来源与日期。
-- 发布时间或交易日晚于截止日、无可核验发布时间的文本会被排除。滚动新闻接口可能不覆盖很早的历史，接口无返回不等于历史上没有事件。
-- 技术指标和对照曲线使用未复权日线。拆股、分红等公司行动可能造成跳变，展示的价格变化不等于总回报。
-- 对照只采用双方共同覆盖且有成交的日期，不填补停牌、缺失或重复日期。覆盖不足时显示实际区间和缺口。
-- 财报期末不等于披露日。缺少三表或估值输入时保留缺口，不凭空生成目标价。历史过滤不构成严格的 point-in-time 回测数据库。
-- 报告及研究数据默认在 `agent/data/research.sqlite3`，LangGraph checkpoint 在 `agent/data/checkpoints.sqlite3`；原生线程事件由已连接的 Intelligence 保存。应备份自己的数据目录。
-- 当前是单用户本机版，尚无公网 SaaS 的身份认证、租户隔离、计费和生产运维体系。只读数据命令不读取持仓、不下单。
-
-已观察到的不足和后续验收要求见 [研究路线图](copilotkit-app/RESEARCH-ROADMAP.md)，其中包含模型对数据缺口描述仍需改进的问题。
-
-## 项目结构
-
-```text
-copilotkit-app/
-  src/app/                 Next.js 页面、CopilotKit Runtime 与研究 API 代理
-  src/components/          研究配置、原生聊天集成、报告、复盘、任务与设置
-  src/lib/                 研究类型、历史恢复和对照规则
-  agent/main.py            FastAPI 入口与 LangGraph 生命周期
-  agent/src/               数据、研究流程、调度、持久化及业务模块
-  agent/tests/             Python 业务与边界测试
-  scripts/                 启动、uv 适配与原生能力集成检查
-  VALIDATION.md            按版本记录的实际验收
-  RESEARCH-ROADMAP.md       体验缺口与迭代记录
+```mermaid
+flowchart LR
+    UI[Next.js workspace + native CopilotChat] <--> Runtime[CopilotKit Runtime]
+    Runtime <-->|AG-UI streams and shared state| Agent[FastAPI + LangGraph]
+    Runtime <--> Intelligence[Optional CopilotKit Intelligence]
+    UI <-->|Allowlisted research and settings API| Agent
+    Agent --> Research[Evidence → analysts → bull/bear and risk review → report]
+    Research --> Models[Qwen / DeepSeek / GLM]
+    Research --> Sources[Read-only market data + Python calculations]
+    Agent <--> SQLite[Local SQLite: reports, tasks, schedules, checkpoints]
 ```
 
-## 验证
+The model interprets evidence. Code computes technical indicators, schedules, condition outcomes and common-session comparisons.
+
+## Local storage and privacy
+
+- Reports, preferences and cached data: `copilotkit-app/agent/data/research.sqlite3`.
+- LangGraph checkpoints: `copilotkit-app/agent/data/checkpoints.sqlite3`.
+- API keys: the ignored server `.env`; they are not stored in report records or returned by the settings API.
+- Model calls send relevant prompts/evidence to the provider you configure. A hosted Intelligence connection can store native thread events and traces. This is not an offline-only application.
+- Back up your own data directory. Never commit `.env`, databases, checkpoints or private research artifacts.
+- There is no built-in public-service authentication. Keep the current application local until production access controls and user isolation are implemented.
+
+## Development
 
 ```powershell
+cd copilotkit-app
 npm run build
 npx tsc --noEmit
 cd agent
 uv run python -m unittest discover -s tests -v
 ```
 
-本版本 Python 测试 59 项；生产页面走查、数据样本、接口观测及未覆盖项见 [验收记录](copilotkit-app/VALIDATION.md)。`scripts/smoke.py` 会调用已配置模型，运行前应了解模型费用。
+The Python suite covers research boundaries, tasks, schedules, report comparison, market review, follow-ups and provider configuration. Provider unit tests use temporary storage and mocked network failures. A real connection test consumes a small model request.
 
-## 参考与许可
+See [validation notes](copilotkit-app/VALIDATION.md) for actual test paths and unverified areas, and the [research roadmap](copilotkit-app/RESEARCH-ROADMAP.md) for remaining gaps. Full commercial production readiness is not implied by a successful local build.
 
-业务场景参考 [Vibe AStock](https://github.com/simonlin1212/vibe-astock) 与 [TradingAgents-astock](https://github.com/simonlin1212/TradingAgents-astock)，备用数据适配思路参考 [a-stock-data](https://github.com/simonlin1212/a-stock-data)。当前应用保留 CopilotKit 原生集成，具体能力以本仓库实现及验收记录为准。
+```text
+copilotkit-app/
+  src/app/          Next.js pages, runtime and API proxy
+  src/components/   Chat, research, reports, review, tasks and settings
+  src/lib/          Domain types, history and interface translations
+  agent/main.py     FastAPI entry point and LangGraph lifecycle
+  agent/src/        Model adapters, data, workflows, persistence and scheduling
+  agent/tests/      Business logic and boundary tests
+  scripts/          Build/start helpers and integration checks
+docs/screenshots/   Actual interface previews
+```
 
-许可见 [LICENSE](copilotkit-app/LICENSE)。模型和行情服务的授权与使用条款由各服务提供方决定。
+## Acknowledgments and license
+
+Built on [CopilotKit](https://github.com/CopilotKit/CopilotKit), [LangGraph](https://github.com/langchain-ai/langgraph) and [Next.js](https://github.com/vercel/next.js). Workflow and documentation organization were inspired by [Vibe AStock](https://github.com/simonlin1212/vibe-astock/blob/main/README_en.md) and [TradingAgents-astock](https://github.com/simonlin1212/TradingAgents-astock). Feature claims here describe this repository's own implementation.
+
+See [LICENSE](copilotkit-app/LICENSE). Market-data and model access remain subject to their providers' terms. Research output is for information and learning, not personalized investment advice.

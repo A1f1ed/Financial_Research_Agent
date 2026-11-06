@@ -35,7 +35,9 @@ from src.review_candidates import initialize_candidates, router as review_candid
 from src.a_share_events import router as a_share_events_router
 from src.market_sentiment import router as market_sentiment_router
 from src.report_comparison import router as report_comparison_router
-from src.preferences import AISettings, DataSettings, public_ai_settings, read_setting, write_setting
+from src.preferences import DataSettings, public_ai_settings, read_setting, write_setting
+from src.preferences import PROVIDERS
+from src.ai_settings import router as ai_settings_router
 import json
 from copilotkit import LangGraphAGUIAgent
 from ag_ui_langgraph import add_langgraph_fastapi_endpoint
@@ -74,18 +76,14 @@ app.include_router(review_candidates_router)
 app.include_router(a_share_events_router)
 app.include_router(market_sentiment_router)
 app.include_router(report_comparison_router)
+app.include_router(ai_settings_router)
 
 
 @app.get("/research/settings")
 def settings():
-    return {"ai": public_ai_settings(), "data": read_setting("data", {"cache_minutes": 15}),
+    return {"ai": public_ai_settings(), "profiles": {key: public_ai_settings(key) for key in PROVIDERS},
+            "data": read_setting("data", {"cache_minutes": 15}),
             "cli_available": bool(cli_path())}
-
-
-@app.put("/research/settings/ai")
-def save_ai_settings(value: AISettings):
-    write_setting("ai", value)
-    return public_ai_settings()
 
 
 @app.put("/research/settings/data")
@@ -105,7 +103,7 @@ async def health():
 @app.get("/research/status")
 async def research_status():
     return {"provider": "Longbridge", "cli_available": bool(cli_path()),
-            "model": os.getenv("COPILOTKIT_AGENT_MODEL", "openai:qwen3.8-max"),
+            "model": public_ai_settings()["model"],
             "learning": bool(skills), "storage": "sqlite", "mode": "single-user-local",
             "historical_policy": "date-filtered; missing or unverifiable publication dates are excluded"}
 

@@ -1,22 +1,19 @@
-"use client";
-
 import "./globals.css";
 import "@copilotkit/react-core/v2/styles.css";
 import "./research.css";
 
-import { CopilotKit } from "@copilotkit/react-core/v2";
-import { ThemeProvider } from "@/hooks/use-theme";
-// A2UI catalog: definitions + renderers in ./declarative-generative-ui/
-import { demonstrationCatalog } from "./declarative-generative-ui/renderers";
+import { cookies } from "next/headers";
+import { AppProviders } from "./providers";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const language = (await cookies()).get("aperture-locale")?.value === "zh" ? "zh" : "en";
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang={language === "en" ? "en" : "zh-CN"} suppressHydrationWarning>
       <head>
-        <title>Aperture · 金融研究工作台</title>
-        <meta name="description" content="保留原生 CopilotKit 对话与运行追踪的多分析师金融研究工作台。" />
+        <title>{language === "en" ? "Aperture · Finance Research Workspace" : "Aperture · 金融研究工作台"}</title>
+        <meta name="description" content={language === "en" ? "A multi-analyst finance research workspace with native CopilotKit chat and run tracing." : "保留原生 CopilotKit 对话与运行追踪的多分析师金融研究工作台。"} />
         <link
           rel="icon"
           type="image/svg+xml"
@@ -44,16 +41,7 @@ export default function RootLayout({
         everything rendered inside <body> is still fully hydration-checked.
       */}
       <body className={`antialiased`} suppressHydrationWarning>
-        <ThemeProvider>
-          <CopilotKit
-            runtimeUrl="/api/copilotkit"
-            a2ui={{ catalog: demonstrationCatalog }}
-            openGenerativeUI={{}}
-            useSingleEndpoint={false}
-          >
-            {children}
-          </CopilotKit>
-        </ThemeProvider>
+        <AppProviders language={language}>{children}</AppProviders>
       </body>
     </html>
   );
