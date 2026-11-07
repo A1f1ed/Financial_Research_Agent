@@ -2,7 +2,6 @@
 import asyncio
 import json
 import logging
-import sqlite3
 from datetime import datetime, time, timedelta, timezone
 from typing import Annotated, Literal
 from uuid import uuid4
@@ -12,8 +11,11 @@ from pydantic import Field, model_validator
 
 from .research_data import cash_hours, close_buffer_minutes, exchange_calendar, exchange_sessions, market_zone
 from .research_models import ResearchConfig
-from .research_store import connect, get_report
-from .research_workflow import execute_research
+from .research_store import connect
+from .persistence.jobs import JobRepository, MissingRecord, StateConflict
+from .persistence.models import Job, Schedule as StoredSchedule
+from sqlalchemy import select
+from .jobs.runner import run_job
 from .scheduled_briefs import PRICE_WORKFLOWS, BriefOptions, execute_brief
 
 router = APIRouter(prefix="/research")
@@ -85,141 +87,71 @@ def next_occurrence(schedule: Schedule, now: datetime) -> str | None:
 
 
 def initialize_queue():
+    """Validate migrated storage without changing historical task states."""
     with connect() as db:
-        db.executescript("""
-            CREATE TABLE IF NOT EXISTS schedules (id TEXT PRIMARY KEY, body TEXT NOT NULL, next_run TEXT);
-            CREATE TABLE IF NOT EXISTS hidden_tasks (id TEXT PRIMARY KEY);
-            CREATE TABLE IF NOT EXISTS jobs (
-                id TEXT PRIMARY KEY, name TEXT NOT NULL, config TEXT NOT NULL, schedule_id TEXT,
-                status TEXT NOT NULL, created_at TEXT NOT NULL, error TEXT
-            );
-        """)
-        for (job_id,) in db.execute("SELECT id FROM jobs WHERE status='running'").fetchall():
-            row = db.execute("SELECT body FROM reports WHERE id=?", (job_id,)).fetchone()
-            report = json.loads(row[0]) if row else None
-            status = report["status"] if report else "running"
-            error = None
-            if status == "running":
-                status, error = "failed", "服务重启，任务中断"
-                if report:
-                    report["status"] = status
-                    db.execute("UPDATE reports SET body=? WHERE id=?", (json.dumps(report, ensure_ascii=False), job_id))
-            db.execute("UPDATE jobs SET status=?, error=? WHERE id=?", (status, error, job_id))
+        db.execute(select(Job.id).limit(1))
 
 
-def enqueue(db, name, config, schedule_id=None, *, brief=None, trigger=None):
-    job_id = str(uuid4())
-    payload = config.model_dump(mode="json")
-    if brief:
-        payload["_brief"] = brief.model_dump(mode="json")
-    if trigger:
-        payload["_trigger"] = trigger
-    db.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,NULL)", (
-        job_id, name, json.dumps(payload, ensure_ascii=False), schedule_id, "queued", datetime.now(UTC).isoformat(),
-    ))
-    return job_id
+def as_datetime(value):
+    return datetime.fromisoformat(value) if isinstance(value, str) else value
 
 
-def enqueue_schedule(db, key, schedule, now, trigger):
+def schedule_payload(body, now=None):
+    schedule = Schedule.model_validate(body)
+    now = now or datetime.now(UTC)
     config = schedule.config.model_copy(update={"as_of": now.astimezone(market_zone(schedule.config.market)).date()})
-    brief = BriefOptions.model_validate(schedule.model_dump()) if schedule.workflow != "stock" else None
-    return enqueue(db, schedule.name, config, key, brief=brief, trigger=trigger)
+    payload = config.model_dump(mode="json")
+    if schedule.workflow != "stock":
+        payload["_brief"] = BriefOptions.model_validate(schedule.model_dump()).model_dump(mode="json")
+    return payload
+
+
+def translated(operation):
+    try:
+        return operation()
+    except MissingRecord as error:
+        raise HTTPException(404, str(error)) from None
+    except StateConflict as error:
+        raise HTTPException(409, str(error)) from None
 
 
 @router.post("/tasks", status_code=202)
 def create_job(config: ResearchConfig):
-    with connect() as db:
-        return {"id": enqueue(db, f"{config.symbol} 单股分析", config)}
+    return {"id": JobRepository().create_job(f"{config.symbol} 单股分析", config.model_dump(mode="json"))}
 
 
 @router.get("/tasks")
-def tasks(schedule_id: str | None = None, kind: Literal["manual", "scheduled"] | None = None,
+def tasks(schedule_id: str | None = None, kind: Literal["manual", "scheduled", "document", "knowledge"] | None = None,
           limit: Annotated[int | None, Query(ge=1, le=100)] = None):
-    with connect() as db:
-        query = "SELECT id,name,config,schedule_id,status,created_at,error FROM jobs"
-        clauses, parameters = [], []
-        if schedule_id:
-            clauses.append("schedule_id=?")
-            parameters.append(schedule_id)
-        else:
-            clauses.append("id NOT IN (SELECT id FROM hidden_tasks)")
-        if kind:
-            clauses.append("schedule_id IS NULL" if kind == "manual" else "schedule_id IS NOT NULL")
-        rows = db.execute("SELECT job.*, report.id, json_extract(report.body,'$.assessment.summary') FROM (" +
-                          query + " WHERE " + " AND ".join(clauses) + " ORDER BY created_at DESC LIMIT ?) AS job "
-                          "LEFT JOIN reports AS report ON report.id=job.id AND report.archived=0",
-                          (*parameters, limit or -1)).fetchall()
-        legacy = [] if schedule_id or kind == "scheduled" else db.execute("""
-            SELECT id, json_extract(body,'$.symbol'), json_extract(body,'$.status'), json_extract(body,'$.created_at')
-            FROM reports WHERE archived=0 AND id NOT IN (SELECT id FROM jobs)
-                AND id NOT IN (SELECT id FROM hidden_tasks)
-            ORDER BY json_extract(body,'$.created_at') DESC LIMIT ?
-        """, (limit or -1,)).fetchall()
-    result = []
-    for job_id, name, config, plan_id, status, created_at, error, report_id, summary in rows:
-        payload = json.loads(config)
-        result.append({"id": job_id, "name": name, "symbol": payload["symbol"], "kind": "scheduled" if plan_id else "manual",
-                       "schedule_id": plan_id, "trigger": payload.get("_trigger"), "managed": True,
-                       "summary": summary,
-                       "status": status, "created_at": created_at, "error": error,
-                       "report_id": report_id})
-    for report_id, symbol, status, created_at in legacy:
-        result.append({"id": report_id, "name": f"{symbol} 单股分析", "symbol": symbol,
-                       "kind": "manual", "status": status, "created_at": created_at, "report_id": report_id})
-    return {"tasks": sorted(result, key=lambda item: item["created_at"], reverse=True)[:limit]}
+    return {"tasks": JobRepository().list_tasks(schedule_id, kind, limit)}
 
 
 @router.get("/tasks/{job_id}")
 def task_detail(job_id: str):
-    with connect() as db:
-        row = db.execute("SELECT name,config,status,error FROM jobs WHERE id=?", (job_id,)).fetchone()
-    report = get_report(job_id)
-    if row is None:
-        if report is None:
-            raise HTTPException(404, "任务不存在")
-        name, payload, status, error = f"{report['symbol']} 单股分析", report["config"], report["status"], None
-    else:
-        name, config, status, error = row
-        payload = json.loads(config)
-    return {
-        "id": job_id, "name": name, "status": status, "error": error, "config": payload,
-        "workflow": (payload.get("_brief") or {}).get("workflow"),
-        "report_id": report["id"] if report else None,
-        "stages": report["stages"] if report else [],
-        "elapsed_seconds": report["elapsed_seconds"] if report else 0,
-        "has_assessment": bool(report and report.get("assessment")),
-    }
+    return translated(lambda: JobRepository().task_detail(job_id))
 
 
 @router.delete("/tasks/{job_id}")
 def hide_task(job_id: str):
-    with connect() as db:
-        db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT status FROM jobs WHERE id=?", (job_id,)).fetchone()
-        if row is None:
-            report = db.execute("SELECT body FROM reports WHERE id=? AND archived=0", (job_id,)).fetchone()
-            if report is None:
-                raise HTTPException(404, "任务不存在")
-            status = json.loads(report[0])["status"]
-        else:
-            status = row[0]
-        if status not in {"complete", "partial", "failed", "cancelled"}:
-            raise HTTPException(409, "请等任务结束后再删除执行记录。")
-        db.execute("INSERT OR IGNORE INTO hidden_tasks VALUES (?)", (job_id,))
+    translated(lambda: JobRepository().hide_task(job_id))
     return {"id": job_id}
+
+
+@router.post("/tasks/{job_id}/cancel")
+def cancel_task(job_id: str):
+    return {"id": job_id, "status": translated(lambda: JobRepository().cancel(job_id))}
 
 
 @router.get("/schedules")
 def schedules():
+    from src.infrastructure.config import environment
     now = datetime.now(UTC).isoformat()
-    with connect() as db:
-        result = []
-        for key, body, due in db.execute("SELECT id,body,next_run FROM schedules ORDER BY rowid DESC"):
-            plan = json.loads(body)
-            if plan["repeat"] == "trading_days" and due and due <= now:
-                due = None
-            result.append({"id": key, **plan, "next_run": due})
-    return {"schedules": result}
+    result = JobRepository().list_schedules()
+    for plan in result:
+        if plan["repeat"] == "trading_days" and plan["next_run"] and plan["next_run"] <= now:
+            plan["next_run"] = None
+    enabled = str(environment().get("RESEARCH_SCHEDULER_ENABLED", "false")).lower() == "true"
+    return {"schedules": result, "meta": {"scheduler_enabled": enabled}}
 
 
 @router.get("/schedules/{schedule_id}/history")
@@ -229,77 +161,58 @@ def schedule_history(schedule_id: str):
 
 @router.post("/schedules", status_code=201)
 def create_schedule(schedule: Schedule):
-    schedule_id = str(uuid4())
-    with connect() as db:
-        db.execute("INSERT INTO schedules VALUES (?,?,?)", (schedule_id, schedule.model_dump_json(),
-                   next_occurrence(schedule, datetime.now(UTC)) if schedule.enabled else None))
-    return {"id": schedule_id}
+    due = next_occurrence(schedule, datetime.now(UTC)) if schedule.enabled else None
+    return {"id": JobRepository().create_schedule(schedule.model_dump(mode="json"), as_datetime(due))}
 
 
 @router.put("/schedules/{schedule_id}")
 def update_schedule(schedule_id: str, schedule: Schedule):
-    with connect() as db:
-        cursor = db.execute("UPDATE schedules SET body=?, next_run=? WHERE id=?", (schedule.model_dump_json(),
-                            next_occurrence(schedule, datetime.now(UTC)) if schedule.enabled else None, schedule_id))
-        if cursor.rowcount == 0:
-            raise HTTPException(404, "定时任务不存在")
+    due = next_occurrence(schedule, datetime.now(UTC)) if schedule.enabled else None
+    translated(lambda: JobRepository().update_schedule(schedule_id, schedule.model_dump(mode="json"), as_datetime(due)))
     return {"id": schedule_id}
 
 
 @router.delete("/schedules/{schedule_id}")
 def remove_schedule(schedule_id: str):
-    with connect() as db:
-        db.execute("DELETE FROM schedules WHERE id=?", (schedule_id,))
+    translated(lambda: JobRepository().archive_schedule(schedule_id))
     return {"id": schedule_id}
 
 
 @router.post("/schedules/{schedule_id}/run", status_code=202)
 def run_schedule_now(schedule_id: str):
+    return translated(lambda: JobRepository().run_schedule(schedule_id, schedule_payload))
+
+
+def enqueue_clock_run(db, plan, now):
+    if not db.scalar(select(Job.id).where(Job.schedule_id == plan.id, Job.status.in_(["queued", "running"]))):
+        payload = schedule_payload(plan.body, now)
+        payload["_trigger"] = "clock"
+        return JobRepository.enqueue(db, plan.body["name"], payload, plan.id)
+
+
+def dispatch_due_schedules(now=None):
+    now = now or datetime.now(UTC)
     with connect() as db:
-        db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT body FROM schedules WHERE id=?", (schedule_id,)).fetchone()
-        if row is None:
-            raise HTTPException(404, "定时任务不存在")
-        active = db.execute(
-            "SELECT id FROM jobs WHERE schedule_id=? AND status IN ('queued','running')",
-            (schedule_id,),
-        ).fetchone()
-        if active:
-            return {"id": active[0], "existing": True}
-        schedule = Schedule.model_validate_json(row[0])
-        return {"id": enqueue_schedule(db, schedule_id, schedule, datetime.now(UTC), "manual"), "existing": False}
-
-
-def claim_jobs(capacity):
-    now = datetime.now(UTC)
-    with connect() as db:
-        db.execute("BEGIN IMMEDIATE")
-        for key, body in db.execute("SELECT id,body FROM schedules WHERE next_run <= ? AND json_extract(body,'$.repeat') != 'trading_days'",
-                                    (now.isoformat(),)).fetchall():
-            schedule = Schedule.model_validate_json(body)
-            enqueue_clock_run(db, key, schedule, now)
-            db.execute("UPDATE schedules SET next_run=? WHERE id=?", (next_occurrence(schedule, now), key))
-        rows = db.execute("SELECT id,config FROM jobs WHERE status='queued' ORDER BY created_at LIMIT ?", (capacity,)).fetchall()
-        db.executemany("UPDATE jobs SET status='running' WHERE id=?", [(job_id,) for job_id, _ in rows])
-    return rows
-
-
-def enqueue_clock_run(db, key, schedule, now):
-    if not db.execute("SELECT 1 FROM jobs WHERE schedule_id=? AND status IN ('queued','running')", (key,)).fetchone():
-        enqueue_schedule(db, key, schedule, now, "clock")
+        plans = db.scalars(select(StoredSchedule).where(StoredSchedule.archived.is_(False),
+            StoredSchedule.next_run <= now, StoredSchedule.body["repeat"].astext != "trading_days",
+            StoredSchedule.body["enabled"].as_boolean().is_(True)).with_for_update(skip_locked=True).limit(100)).all()
+        for plan in plans:
+            enqueue_clock_run(db, plan, now)
+            plan.next_run = as_datetime(next_occurrence(Schedule.model_validate(plan.body), now))
+            plan.version += 1
+    return len(plans)
 
 
 async def sync_trading_schedules(now, retry_after):
     groups = {}
     with connect() as db:
-        pending = db.execute("""
-            SELECT id,body,next_run FROM schedules WHERE (next_run IS NULL OR next_run <= ?)
-                AND json_extract(body,'$.repeat') = 'trading_days' AND json_extract(body,'$.enabled') = 1
-        """, (now.isoformat(),)).fetchall()
-    for key, body, due in pending:
-        plan = Schedule.model_validate_json(body)
+        pending = db.execute(select(StoredSchedule.id, StoredSchedule.body, StoredSchedule.next_run, StoredSchedule.version).where(
+            StoredSchedule.archived.is_(False), (StoredSchedule.next_run.is_(None) | (StoredSchedule.next_run <= now)),
+            StoredSchedule.body["repeat"].astext == "trading_days", StoredSchedule.body["enabled"].as_boolean().is_(True))).all()
+    for key, body, due, version in pending:
+        plan = Schedule.model_validate(body)
         market = "SH" if plan.config.market == "SZ" else plan.config.market
-        groups.setdefault(market, []).append((key, body, due, plan))
+        groups.setdefault(market, []).append((key, body, due, version, plan))
 
     async def sync_market(market, plans):
         if market in retry_after and now < retry_after[market]:
@@ -307,79 +220,27 @@ async def sync_trading_schedules(now, retry_after):
         zone = market_zone(market)
         today = now.astimezone(zone).date()
         try:
-            anchored = any(plan.timing != "clock" for _, _, _, plan in plans)
+            anchored = any(plan.timing != "clock" for _, _, _, _, plan in plans)
             calendar = await exchange_calendar(market, today, today + timedelta(days=21)) if anchored else {}
             sessions = list(calendar) if anchored else await exchange_sessions(market, today, today + timedelta(days=21))
             if not sessions:
                 raise ValueError("未来交易日历为空")
             times = {key: [trading_run_time(plan, day, calendar.get(day, False)) for day in sessions]
-                     for key, _, _, plan in plans}
+                     for key, _, _, _, plan in plans}
         except (RuntimeError, ValueError, TypeError, OSError, TimeoutError):
             retry_after[market] = now + timedelta(minutes=1)
             return
         retry_after.pop(market, None)
         with connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            for key, body, due, plan in plans:
-                next_run = next((candidate.isoformat() for candidate in times[key] if candidate > now), None)
-                # A user edit or pause made during the calendar request wins.
-                updated = db.execute("UPDATE schedules SET next_run=? WHERE id=? AND body=? AND next_run IS ?",
-                                     (next_run, key, body, due))
-                if not updated.rowcount or not due:
+            for key, body, due, version, plan in plans:
+                stored = db.scalar(select(StoredSchedule).where(StoredSchedule.id == key).with_for_update())
+                if stored is None or stored.archived or stored.version != version or stored.next_run != due:
+                    continue  # Pause, edit or another scheduler wins while a source request is in flight.
+                stored.next_run = next((candidate for candidate in times[key] if candidate > now), None)
+                stored.version += 1
+                if not due:
                     continue
-                scheduled = datetime.fromisoformat(due)
-                if (scheduled in times[key] and scheduled.astimezone(zone).date() == today
-                        and now - scheduled <= TRADING_RUN_GRACE):
-                    enqueue_clock_run(db, key, plan, now)
+                if (due in times[key] and due.astimezone(zone).date() == today and now - due <= TRADING_RUN_GRACE):
+                    enqueue_clock_run(db, stored, now)
 
     await asyncio.gather(*(sync_market(market, plans) for market, plans in groups.items()))
-
-
-async def run_trading_scheduler():
-    retry_after = {}
-    while True:
-        try:
-            await sync_trading_schedules(datetime.now(UTC), retry_after)
-        except sqlite3.OperationalError:
-            logger.exception("Trading calendar scheduler could not access SQLite; will retry")
-        await asyncio.sleep(2)
-
-
-async def run_job(job_id, raw_config):
-    error = None
-    try:
-        payload = json.loads(raw_config)
-        config = ResearchConfig.model_validate(payload)
-        if payload.get("_brief"):
-            report = await execute_brief(config, BriefOptions.model_validate(payload["_brief"]), job_id)
-        else:
-            report = await execute_research(config, report_id=job_id)
-        status = report["status"]
-    except asyncio.CancelledError:
-        status, error = "cancelled", "服务停止，任务中断"
-        raise
-    except Exception as exc:
-        status, error = "failed", f"研究执行失败（{type(exc).__name__}）"
-    finally:
-        with connect() as db:
-            db.execute("UPDATE jobs SET status=?,error=? WHERE id=?", (status, error, job_id))
-
-
-async def run_queue():
-    active = set()
-    calendar = asyncio.create_task(run_trading_scheduler())
-    try:
-        while True:
-            active = {task for task in active if not task.done()}
-            try:
-                claimed = claim_jobs(3 - len(active))
-            except sqlite3.OperationalError:
-                logger.exception("Research queue could not access SQLite; will retry")
-                claimed = []
-            for job_id, config in claimed:
-                active.add(asyncio.create_task(run_job(job_id, config)))
-            await asyncio.sleep(2)
-    finally:
-        for task in active | {calendar}:
-            task.cancel()
-        await asyncio.gather(*active, calendar, return_exceptions=True)

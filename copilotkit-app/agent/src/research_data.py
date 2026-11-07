@@ -8,6 +8,7 @@ import math
 import os
 import shutil
 import statistics
+import subprocess
 import time
 from datetime import date, datetime, time as dt_time, timedelta, timezone
 from pathlib import Path
@@ -17,7 +18,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
 from .research_models import ResearchConfig, normalize_symbol
-from .research_store import connect
+from .persistence.business import BusinessRepository
 from .preferences import read_setting
 from .a_share_events import attach_holder_filings, covered_symbol, fetch_event_pages, normalize_events
 
@@ -41,20 +42,22 @@ async def cli(*args, fresh=False):
     if not binary:
         raise RuntimeError("未找到 Longbridge CLI；设置 LONGBRIDGE_CLI_PATH 并在本机完成 longbridge auth login")
     key = json.dumps(args)
-    with connect() as db:
-        cached = db.execute("SELECT body,fetched FROM cache WHERE key=?", (key,)).fetchone()
     cache_seconds = read_setting("data", {"cache_minutes": 15})["cache_minutes"] * 60
-    if not fresh and cached and time.time() - cached[1] < cache_seconds:
-        return json.loads(cached[0])
-    process = await asyncio.create_subprocess_exec(binary, *args, "--format", "json", "--lang", "zh-CN",
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+    cached = BusinessRepository().cached(key, cache_seconds) if not fresh else None
+    if cached is not None:
+        return cached
+    # Popen's blocking pipe collection runs in a thread, retaining explicit
+    # cancellation/timeout cleanup while allowing psycopg's Selector loop on Windows.
+    process = subprocess.Popen([binary, *args, "--format", "json", "--lang", "zh-CN"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         **({"creationflags": 0x08000000} if os.name == "nt" else {}))
+    communication = asyncio.create_task(asyncio.to_thread(process.communicate))
     try:
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=35)
+        stdout, stderr = await asyncio.wait_for(asyncio.shield(communication), timeout=35)
     except (asyncio.TimeoutError, asyncio.CancelledError):
-        if process.returncode is None:
+        if process.poll() is None:
             process.kill()
-        await process.wait()
+        await communication
         raise
     if process.returncode:
         # Provider errors are safe summaries; don't return arbitrary stderr/token paths.
@@ -65,8 +68,7 @@ async def cli(*args, fresh=False):
             raise RuntimeError("Longbridge 授权失效，请在本机运行 longbridge auth login")
         raise RuntimeError(f"Longbridge {args[0]} 查询失败（退出码 {process.returncode}）")
     result = json.loads(stdout)
-    with connect() as db:
-        db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (key, json.dumps(result), time.time()))
+    BusinessRepository().put_cache(key, result)
     return result
 
 
@@ -177,10 +179,9 @@ async def tencent_candles(symbol, start, cutoff):
     code, market = symbol.split(".")
     url = TENCENT_KLINE + "?" + urlencode({"param": f"{market.lower()}{code},day,{start},{cutoff},640,"})
     key = json.dumps(["tencent-unadjusted-daily", symbol, str(start), str(cutoff)])
-    with connect() as db:
-        cached = db.execute("SELECT body,fetched FROM cache WHERE key=?", (key,)).fetchone()
-    if cached and time.time() - cached[1] < read_setting("data", {"cache_minutes": 15})["cache_minutes"] * 60:
-        return json.loads(cached[0]), url
+    cached = BusinessRepository().cached(key, read_setting("data", {"cache_minutes": 15})["cache_minutes"] * 60)
+    if cached is not None:
+        return cached, url
 
     def fetch():
         request = Request(url, headers={"Referer": "https://gu.qq.com/"})
@@ -190,8 +191,7 @@ async def tencent_candles(symbol, start, cutoff):
     payload = await asyncio.wait_for(asyncio.to_thread(fetch), timeout=6)
     bars = tencent_bars(payload, symbol, start, cutoff)
     if bars:
-        with connect() as db:
-            db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (key, json.dumps(bars), time.time()))
+        BusinessRepository().put_cache(key, bars)
     return bars, url
 
 

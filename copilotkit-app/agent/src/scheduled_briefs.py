@@ -117,6 +117,9 @@ async def execute_brief(config: ResearchConfig, options: BriefOptions, report_id
                                      if options.workflow in PRICE_WORKFLOWS else "新闻与公告按真实发布时间筛选。")},
     }
     save_report(report)
+    from .infrastructure.telemetry import trace_details
+    if trace_details():
+        report["observability"] = trace_details()
     semaphore = asyncio.Semaphore(3)
 
     async def fetch(label, args, calendar):

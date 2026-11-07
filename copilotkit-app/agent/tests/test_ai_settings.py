@@ -1,3 +1,4 @@
+from postgres_fixture import postgres_fixture
 import json
 import os
 import unittest
@@ -14,6 +15,7 @@ from pydantic import ValidationError
 
 from src import ai_settings, preferences, research_store
 from src.model import compatible_model, create_chat_model
+from src.persistence.models import Preference
 
 
 class AISettingsTests(unittest.IsolatedAsyncioTestCase):
@@ -21,7 +23,7 @@ class AISettingsTests(unittest.IsolatedAsyncioTestCase):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         root = Path(directory.name)
-        self.enterContext(patch.object(research_store, "DB", root / "test.sqlite3"))
+        self.enterContext(postgres_fixture())
         self.env_file = root / ".env"
         self.env_file.write_text("UNRELATED_SETTING=preserved\n", encoding="utf-8")
         self.enterContext(patch.object(preferences, "ENV_FILE", self.env_file))
@@ -31,7 +33,7 @@ class AISettingsTests(unittest.IsolatedAsyncioTestCase):
         preferences.write_setting("ai", preferences.AISettings(model="qwen-old", timeout=120))
         # Simulate the old schema, before it had a provider or base_url.
         with research_store.connect() as db:
-            db.execute("UPDATE preferences SET body=? WHERE key='ai'", (json.dumps({"model": "qwen-old", "temperature": 0, "timeout": 120}),))
+            db.get(Preference, "ai").body = {"model": "qwen-old", "temperature": 0, "timeout": 120}
         os.environ.update(DASHSCOPE_BASE_URL="https://example.com/qwen", DEEPSEEK_BASE_URL="https://example.com/deepseek", ZHIPU_BASE_URL="https://example.com/glm")
         self.assertEqual(preferences.public_ai_settings()["model"], "qwen-old")
         for provider, suffix in [("dashscope", "qwen"), ("deepseek", "deepseek"), ("glm", "glm")]:
@@ -50,6 +52,11 @@ class AISettingsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(preferences.public_ai_settings()["provider"], "deepseek")
         self.assertEqual(preferences.public_ai_settings("glm")["model"], "glm-custom")
         self.assertIn("UNRELATED_SETTING=preserved", self.env_file.read_text())
+
+    def test_independent_worker_reads_saved_key_instead_of_stale_process_environment(self):
+        preferences.save_ai_profile(preferences.AISettings(provider="deepseek", model="fixture-model", api_key="fixture-new-key"))
+        with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "fixture-old-process-key"}):
+            self.assertEqual(preferences.provider_key("deepseek"), "fixture-new-key")
 
     def test_provider_specific_factories_and_live_selection(self):
         for provider in preferences.PROVIDERS:

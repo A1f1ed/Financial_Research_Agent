@@ -1,0 +1,15 @@
+.git
+.legacy-backup
+.release-*
+local-data
+**/.env
+**/.env.*
+**/.venv
+**/node_modules
+**/.next
+**/__pycache__
+**/.tools
+**/data
+**/*.sqlite3*
+**/*.log
+**/*.tsbuildinfo

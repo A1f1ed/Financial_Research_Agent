@@ -1,10 +1,10 @@
-"""Native LangGraph agent factory; FastAPI owns the async SQLite lifecycle."""
+"""Native LangGraph agent factory; FastAPI owns the PostgreSQL checkpoint pool."""
 import base64
 import binascii
 
 from copilotkit import CopilotKitMiddleware, StateStreamingMiddleware, StateItem
 from langchain.agents import create_agent
-from langchain.agents.middleware import wrap_model_call
+from langchain.agents.middleware import wrap_model_call, wrap_tool_call
 from langchain_core.messages import HumanMessage
 from src.preferences import read_setting
 from src.model import create_chat_model
@@ -14,6 +14,10 @@ from src.a2ui_fixed_schema import search_flights
 from src.query import query_data
 from src.todos import AgentState, todo_tools
 from src.research_workflow import run_financial_research, read_current_research
+from src.knowledge.tools import search_research_documents
+from src.knowledge.conversations import ConversationRepository
+from src.knowledge.agent_scope import runtime_thread, scoped_request, validate_response
+from langchain_core.messages import ToolMessage
 
 
 def report_attachment_text(message):
@@ -43,7 +47,11 @@ def report_attachment_text(message):
 def build_graph(checkpointer):
     @wrap_model_call
     async def current_model(request, handler):
-        if request.state.get("research_qa_report_id"):
+        key = runtime_thread(request)
+        binding = ConversationRepository().get(key) if key else None
+        if binding:
+            request = scoped_request(request, binding)
+        elif request.state.get("research_qa_report_id"):
             request = request.override(tools=[
                 tool for tool in request.tools if getattr(tool, "name", None) == "read_current_research"
             ], messages=[report_attachment_text(message) for message in request.messages])
@@ -51,12 +59,20 @@ def build_graph(checkpointer):
             request = request.override(model=create_chat_model(
                 "openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False},
             ))
+        response = await handler(request)
+        return validate_response(request, response, key) if binding else response
+
+    @wrap_tool_call
+    async def scoped_tools(request, handler):
+        key = request.runtime.config.get("configurable", {}).get("thread_id")
+        if key and ConversationRepository().get(key) and request.tool_call["name"] != "search_research_documents":
+            return ToolMessage(content="This document conversation cannot run unrelated tools or expand its server-bound scope.", tool_call_id=request.tool_call["id"])
         return await handler(request)
 
     return create_agent(
         model=create_chat_model("openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False}),
-        tools=[run_financial_research, read_current_research, query_data, *todo_tools, generate_a2ui, search_flights],
-        middleware=[CopilotKitMiddleware(), current_model,
+        tools=[run_financial_research, read_current_research, search_research_documents, query_data, *todo_tools, generate_a2ui, search_flights],
+        middleware=[CopilotKitMiddleware(), current_model, scoped_tools,
             StateStreamingMiddleware(StateItem(state_key="todos", tool="manage_todos", tool_argument="todos")),
             *([skills] if skills is not None else [])],
         state_schema=AgentState,

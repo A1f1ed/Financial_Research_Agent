@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import {evidenceSelection} from "../src/lib/graph-evidence-selection.ts";
+const raw="页首\r\n😀公司\r\nBYD COMPANY LIMITED\r\n尾页";
+const displayed=raw.replace(/\r\n?/g,"\n");
+const start=displayed.indexOf("BYD");
+assert.deepEqual(evidenceSelection(raw,start,start+19),{start_offset:9,end_offset:28,quote:"BYD COMPANY LIMITED"});
+assert.deepEqual(evidenceSelection("😀甲乙",2,4),{start_offset:1,end_offset:3,quote:"甲乙"});
+assert.equal(evidenceSelection("😀甲乙",1,3),null,"Half-surrogate boundaries must not form an evidence span");
+assert.deepEqual(evidenceSelection("甲\r乙",0,3),{start_offset:0,end_offset:3,quote:"甲\r乙"});
+assert.equal(evidenceSelection("source",4,4),null);
+console.log("Original Unicode offsets, normalized newlines and empty selections verified.");

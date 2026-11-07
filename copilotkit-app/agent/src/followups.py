@@ -10,7 +10,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, StringConstraints
 
 from .model import create_chat_model
-from .research_store import connect, get_report
+from .research_store import get_report
+from .persistence.business import BusinessRepository
 
 router = APIRouter(prefix="/research")
 logger = logging.getLogger(__name__)
@@ -28,12 +29,7 @@ class Turn(BaseModel):
 
 
 def saved(key):
-    with connect() as db:
-        db.execute("""CREATE TABLE IF NOT EXISTS followups (
-            thread_id TEXT, message_id TEXT, report_id TEXT, questions TEXT NOT NULL,
-            PRIMARY KEY (thread_id, message_id, report_id))""")
-        row = db.execute("SELECT questions FROM followups WHERE (thread_id,message_id,report_id)=(?,?,?)", key).fetchone()
-    return json.loads(row[0]) if row else None
+    return BusinessRepository().followups(*key)
 
 
 @router.get("/followups")
@@ -83,8 +79,7 @@ async def generate(turn: Turn, key):
             questions.append(question)
             if len(questions) == 3:
                 break
-        with connect() as db:
-            db.execute("INSERT OR IGNORE INTO followups VALUES (?,?,?,?)", (*key, json.dumps(questions, ensure_ascii=False)))
+        BusinessRepository().save_followups(key[0], key[1], questions, key[2])
         return questions
     except Exception as error:
         logger.info("Follow-up generation unavailable (%s)", type(error).__name__)

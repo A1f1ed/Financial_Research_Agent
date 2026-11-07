@@ -3,7 +3,7 @@
 import { useLanguage, useT } from "@/hooks/use-language";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { Activity, Bot, CalendarClock, ClipboardList, Database, MessageSquare, Plus, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, FlaskConical, Layers3, LoaderCircle, Play, Settings2, ShieldCheck, Square, X, Sun, Moon } from "lucide-react";
+import { Activity, BookOpen, Bot, CalendarClock, ClipboardList, Database, GitFork, MessageSquare, Plus, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, FlaskConical, Layers3, LoaderCircle, Play, Settings2, ShieldCheck, Square, X, Sun, Moon } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { z } from "zod";
 import { CopilotChat, CopilotChatView, type CopilotChatViewProps, CopilotThreadsDrawer, useAgent, useCopilotChatConfiguration, useFrontendTool, useHumanInTheLoop } from "@copilotkit/react-core/v2";
@@ -14,6 +14,11 @@ import { FollowupContext, useFollowupView } from "@/components/chat-followups";
 import { MarketReview } from "@/components/market-review";
 import { CandidateButton, useReviewCandidates } from "@/components/review-candidates";
 import { ReportLibrary } from "@/components/report-library";
+import { DocumentLibrary } from "@/components/documents/library";
+import { KnowledgeWorkspace } from "@/components/knowledge/workspace";
+import { GraphWorkspace } from "@/components/graphs/workspace";
+import { KnowledgeChatScope, type CitationSelection } from "@/components/knowledge/chat-scope";
+import { KnowledgeCitationViewer } from "@/components/knowledge/citation-viewer";
 import { ReportComparison } from "@/components/report-comparison";
 import { CitationText } from "@/components/research-citation";
 import { FinanceExamples } from "@/components/finance-examples";
@@ -23,23 +28,26 @@ import { useGenerativeUIExamples } from "@/hooks";
 import { useTheme } from "@/hooks/use-theme";
 import { ANALYSTS, DEFAULT_CONFIG, formatReportTime, ResearchConfig, Report, ReportSummary, STAGE_NAMES, STATUS_NAMES } from "@/lib/research";
 
-type Tab = "free" | "config" | "review" | "report" | "sources" | "library" | "comparison" | "schedules" | "tasks" | "execution" | "data" | "ai";
+type Tab = "free" | "config" | "review" | "report" | "sources" | "library" | "documents" | "knowledge" | "graphs" | "graph-view" | "comparison" | "schedules" | "tasks" | "execution" | "data" | "ai";
 type RecentTask = { id: string; symbol: string; status: string; created_at: string; kind: string };
 const safeUrl = (value: string) => /^https?:\/\//i.test(value) ? value : "#";
 const mainlandCode = /^[0-9]{6}\.(SH|SZ)$/;
 const eventSourceNames: Record<string, string> = { billboard: "龙虎榜", unlock: "限售解禁", holder_change: "股东增减持" };
 
 const FreeChatDraft = createContext<((value: string) => void) | undefined>(undefined);
+const KnowledgeSubmitReady = createContext(true);
+const DocumentConversation = createContext(false);
 
 function FreeWelcome({ input }: { input: React.ReactElement }) {
   const t = useT();
   const onExample = useContext(FreeChatDraft);
+  const documentConversation = useContext(DocumentConversation);
   return <div className="free-welcome">
     <div className="free-welcome-content">
       <div className="free-welcome-icon"><Activity size={26} /></div>
-      <h1>{t("一起理清市场脉络。")}</h1>
-      <p>{t("从一家公司、一份财报或一条研究假设开始，把问题问到可核验的证据上。")}</p>
-      <FinanceExamples onSelect={onExample} />
+      <h1>{t(documentConversation ? "从当前资料寻找答案。" : "一起理清市场脉络。")}</h1>
+      <p>{t(documentConversation ? "回答仅使用当前会话绑定的资料与截止日期。先定位原文，再区分事实、判断和缺口。" : "从一家公司、一份财报或一条研究假设开始，把问题问到可核验的证据上。")}</p>
+      {!documentConversation && <FinanceExamples onSelect={onExample} />}
     </div>
     <div className="free-welcome-input">{t(input)}</div>
   </div>;
@@ -47,8 +55,9 @@ function FreeWelcome({ input }: { input: React.ReactElement }) {
 
 function FreeChatView(props: CopilotChatViewProps) {
   const followups = useFollowupView(props);
+  const ready = useContext(KnowledgeSubmitReady);
   return <FreeChatDraft.Provider value={props.onInputChange}>
-    <CopilotChatView {...props} {...followups} welcomeScreen={FreeWelcome} />
+    <CopilotChatView {...props} {...followups} onSubmitMessage={ready ? props.onSubmitMessage : undefined} isConnecting={props.isConnecting || !ready} welcomeScreen={FreeWelcome} />
   </FreeChatDraft.Provider>;
 }
 
@@ -74,7 +83,14 @@ export function ResearchWorkspace() {
   const [provider, setProvider] = useState<{ cli_available: boolean; model: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [execution, setExecution] = useState<{ id: string; from: "schedules" | "tasks" } | null>(null);
+  const [execution, setExecution] = useState<{ id: string; from: "schedules" | "tasks" | "documents" | "knowledge" | "graphs" } | null>(null);
+  const [graphId, setGraphId] = useState<string | null>(null);
+  const [knowledgeCollectionId, setKnowledgeCollectionId] = useState<string | null>(null);
+  const [knowledgeReady, setKnowledgeReady] = useState(false);
+  const [boundDocumentThread, setBoundDocumentThread] = useState<string | null>(null);
+  const [documentChatRequest, setDocumentChatRequest] = useState<{ signal: number; collectionId: string } | null>(null);
+  const [knowledgeCitation, setKnowledgeCitation] = useState<CitationSelection | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
   const [scheduleHistoryId, setScheduleHistoryId] = useState<string | null>(null);
   const [stockOpen, setStockOpen] = useState(false);
   const [singleOpen, setSingleOpen] = useState(false);
@@ -240,6 +256,14 @@ export function ResearchWorkspace() {
     document.getElementById("chat-research-config")?.scrollIntoView({ block: "start" });
   }
 
+  function openDocumentConversation(id: string) {
+    if (!chatConfiguration) return;
+    if (agent.isRunning) agent.abortRun();
+    setKnowledgeReady(false); setHistoryRequest(null); setHistoryResult(null); setError("");
+    agent.setMessages([]); agent.setState({}); setTab("free");
+    chatConfiguration.setActiveThreadId(id, { explicit: false });
+  }
+
   return <div className="finance-shell">
     <aside className="workbench-rail">
     <nav className="workbench-sidebar" aria-label={t("工作台导航")}>
@@ -261,8 +285,15 @@ export function ResearchWorkspace() {
           </button>)}
         </details>
         <button aria-current={["library", "comparison", "report", "sources"].includes(tab) ? "page" : undefined} onClick={() => setTab("library")}>{t("报告库")}</button>
+        <button aria-current={tab === "documents" ? "page" : undefined} onClick={() => setTab("documents")}><FileText size={15} />{t("研究资料")}</button>
       </details>
       <button aria-current={tab === "schedules" ? "page" : undefined} onClick={() => setTab("schedules")}><CalendarClock size={17} />{t("定时任务")}</button>
+      <button aria-current={tab === "knowledge" ? "page" : undefined} onClick={() => setTab("knowledge")}><BookOpen size={17} />{t("知识库")}</button>
+      <details className="workbench-nav-group">
+        <summary><GitFork size={17} />GraphRAG<ChevronDown size={14} /></summary>
+        <button aria-current={tab === "graphs" ? "page" : undefined} onClick={() => setTab("graphs")}>{t("图谱管理")}</button>
+        <button aria-current={tab === "graph-view" ? "page" : undefined} onClick={() => setTab("graph-view")}>{t("关系图与路径")}</button>
+      </details>
       <button aria-current={tab === "tasks" ? "page" : undefined} onClick={() => setTab("tasks")}><ClipboardList size={17} />{t("任务中心")}</button>
       <details className="workbench-nav-group">
         <summary><Settings2 size={17} />{t("个人设置")}<ChevronDown size={13} /></summary>
@@ -297,6 +328,7 @@ export function ResearchWorkspace() {
       <main className="finance-content">
         <section className="native-chat-panel chat-first-panel" aria-label={t("研究对话")} hidden={!chatVisible}>
           <div className="free-chat-actions">
+            <KnowledgeChatScope threadId={threadId} agent={agent} running={running} request={documentChatRequest} onCreated={openDocumentConversation} onReady={setKnowledgeReady} onBindingChange={setBoundDocumentThread} onCitation={setKnowledgeCitation} />
             <button type="button" className="chat-config-toggle" disabled={!chatConfiguration} onClick={newConversation}>
               <Plus size={15} aria-hidden="true" />{t("新增对话")}</button>
           </div>
@@ -311,9 +343,15 @@ export function ResearchWorkspace() {
           </p>}
           {historyResult?.request === selectedHistory && historyResult?.incomplete && !running &&
             <p className="chat-research-toolbar">{t("部分历史工具结果未保存。工具卡上的「Running」是当时的状态。")}</p>}
-          <div className="chat-history-body" hidden={historyLoading || !!historyBlockingError}>
+          <div className="chat-history-body" hidden={historyLoading || !!historyBlockingError} onClickCapture={event => {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            const anchor = event.target instanceof Element ? event.target.closest("a") : null;
+            if (!anchor) return; const url = new URL(anchor.href, window.location.href);
+            const match = url.origin === window.location.origin && /^\/evidence\/([a-f0-9-]{36})\/(K[1-9][0-9]*)\/?$/.exec(url.pathname);
+            if (match) { event.preventDefault(); event.stopPropagation(); setKnowledgeCitation({searchId:match[1],citationId:match[2]}); }
+          }}>
             <FollowupContext.Provider value={{ agent, threadId }}>
-              <CopilotChat key={threadId} attachments={{ enabled: true }} chatView={FreeChatView} labels={{ welcomeMessageText: t("一起理清市场脉络。"), chatInputPlaceholder: t("问一个市场、公司或研究方法的问题…"), chatDisclaimerText: t("请结合原始来源核对结论。") }} />
+              <DocumentConversation.Provider value={boundDocumentThread === threadId}><KnowledgeSubmitReady.Provider value={knowledgeReady}><CopilotChat key={threadId} attachments={{ enabled: boundDocumentThread !== threadId }} chatView={FreeChatView} labels={{ welcomeMessageText: t("一起理清市场脉络。"), chatInputPlaceholder: t(boundDocumentThread === threadId ? "针对选定资料提问；新材料请先在知识库入库…" : "问一个市场、公司或研究方法的问题…"), chatDisclaimerText: t("请结合原始来源核对结论。") }} /></KnowledgeSubmitReady.Provider></DocumentConversation.Provider>
             </FollowupContext.Provider>
           </div>
         </section>
@@ -335,7 +373,7 @@ export function ResearchWorkspace() {
             <ReportComparison ids={comparisonIds} visible={tab === "comparison"} onBack={() => setTab("library")}
               onOpen={loadReport} onSource={(selected, id) => { setSavedReport(selected); showSource(id); }} />
         </div>}
-        {!chatVisible && tab !== "review" && tab !== "library" && tab !== "comparison" && <div className="research-scroll" key={tab}>
+        {!chatVisible && tab !== "review" && tab !== "library" && tab !== "comparison" && <div className="research-scroll" key={tab === "graphs" || tab === "graph-view" ? "graph-workspace" : tab}>
             {tab === "config" && <div className="stock-workspace">
               <span className="section-eyebrow">{t("股票分析")}</span>
               <h1>{t("单股分析")}</h1>
@@ -369,11 +407,17 @@ export function ResearchWorkspace() {
             {tab === "schedules" && <SchedulePanel config={config} candidates={candidates} historyId={scheduleHistoryId} setHistoryId={setScheduleHistoryId}
               onTask={id => { setExecution({ id, from: "schedules" }); setTab("execution"); }} />}
             {tab === "tasks" && <TaskPanel onReport={loadReport} onTask={id => { setExecution({ id, from: "tasks" }); setTab("execution"); }} onSchedules={() => setTab("schedules")} />}
+            {tab === "documents" && <DocumentLibrary selectedId={documentId} onSelect={setDocumentId}
+              onTask={id => { setExecution({ id, from: "documents" }); setTab("execution"); }} />}
+            {tab === "knowledge" && <KnowledgeWorkspace selectedId={knowledgeCollectionId} onSelect={setKnowledgeCollectionId} onAllDocuments={() => setTab("documents")}
+              onDocumentChat={id => { setTab("free"); setDocumentChatRequest(value => ({signal:(value?.signal || 0)+1,collectionId:id})); }}
+              onTask={id => { setExecution({ id, from: "knowledge" }); setTab("execution"); }} />}
             {tab === "execution" && execution && <div className="workbench-page">
-              <button className="chat-config-toggle" onClick={() => setTab(execution.from)}>{t("返回")}{t(execution.from === "schedules" ? "定时任务" : "任务中心")}</button>
+              <button className="chat-config-toggle" onClick={() => setTab(execution.from)}>{t("返回")} · {t(execution.from === "schedules" ? "定时任务" : execution.from === "documents" ? "研究资料" : execution.from === "knowledge" ? "知识库" : execution.from === "graphs" ? "图谱管理" : "任务中心")}</button>
               <h1>{t("执行详情")}</h1>
-              <ResearchTask key={execution.id} id={execution.id} onReport={loadReport} />
+              <ResearchTask key={execution.id} id={execution.id} onReport={loadReport} onDocument={id => { setDocumentId(id); setTab("documents"); }} onRetry={id => setExecution({ ...execution, id })} />
             </div>}
+            {(tab === "graphs" || tab === "graph-view") && <GraphWorkspace mode={tab === "graphs" ? "manage" : "view"} onMode={mode => setTab(mode === "manage" ? "graphs" : "graph-view")} selectedId={graphId} onSelect={setGraphId} onTask={id => { setExecution({id,from:"graphs"}); setTab("execution"); }} />}
             {(tab === "data" || tab === "ai") && <SettingsPanel section={tab} />}
 
 
@@ -397,6 +441,7 @@ export function ResearchWorkspace() {
 
         </div>}
       </main>
+      {knowledgeCitation && <KnowledgeCitationViewer key={`${knowledgeCitation.searchId}:${knowledgeCitation.citationId}`} selection={knowledgeCitation} onClose={() => setKnowledgeCitation(null)} />}
     </div>
   </div>;
 }

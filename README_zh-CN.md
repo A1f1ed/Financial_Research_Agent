@@ -56,6 +56,8 @@ Inspector、原生线程历史与学习接入依赖你配置的 **CopilotKit Int
 
 ## 数据
 
+可选的 **Langfuse** 通过 OpenTelemetry 接收研究/工具/模型的元数据追踪。服务端 `.env` 配置 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、项目区域对应的 `LANGFUSE_BASE_URL` 后重建服务。不导出问题、回答、原文和推理；可用时记录模型 token 用量。`APERTURE_TRACING_ENABLED=false` 可关闭。该集成补充原生 Inspector，产品内质量/性能评测中心仍在开发。
+
 | 数据源                                        | 当前用途                                                     | 覆盖与限制                                                                     |
 | --------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | [Longbridge CLI](https://open.longbridge.com/) | 主要行情、日线、财务数据、新闻、公司公告、社区样本和交易日历 | 配置支持港股、美股、沪深及新加坡研究；具体可用性取决于账号权限和接口历史窗口。 |
@@ -88,7 +90,7 @@ Inspector、原生线程历史与学习接入依赖你配置的 **CopilotKit Int
 3. 点击 **测试连接**：用当前表单发送一句“你好”，不用研究工具，显示成功、回复、耗时或失败原因；不保存、不切换正在使用的配置，最多等待 20 秒。
 4. 点击 **保存并启用**：后续对话、研究与追问使用该配置，不重新启动已经完成的任务。
 
-在界面填写的密钥写入本机服务端、被 Git 忽略的 `copilotkit-app/.env`；非密钥配置保存在 SQLite。兼容 `GLM_API_KEY`、`ZAI_API_KEY`、`ZHIPUAI_API_KEY`、`GLM_BASE_URL`、`ZAI_BASE_URL` 别名，以 `ZHIPU_*` 为优先。适配层处理推理参数差异，例如 GLM-5.3 无法关闭思考，问候测试使用低推理强度。
+界面密钥保存在仅服务端可读的 `APERTURE_ENV_FILE`：容器使用应用私有共享卷，原生开发使用 `.env`。独立 worker 会读取保存后的新密钥，无需重启。非密钥配置存于 PostgreSQL。兼容 `GLM_API_KEY`、`ZAI_API_KEY`、`ZHIPUAI_API_KEY`、`GLM_BASE_URL`、`ZAI_BASE_URL` 别名，以 `ZHIPU_*` 优先。适配层处理推理参数差异，例如 GLM-5.3 的问候测试使用低推理强度。
 
 问候测试验证基本认证和文本生成，不代表所有模型的工具调用、结构化输出和研究质量均已验证。模型可用性和账号权限可能变化。
 
@@ -98,8 +100,9 @@ Inspector、原生线程历史与学习接入依赖你配置的 **CopilotKit Int
 
 - **Node.js 20.19+**、npm
 - **Python 3.12+**、[uv](https://docs.astral.sh/uv/getting-started/installation/)
+- **Docker Desktop，Linux 引擎运行中**；当前固定开发镜像适用于 amd64
 - 至少一家支持的模型服务 API key
-- 已安装并授权的 [Longbridge CLI](https://open.longbridge.com/)，用于主要市场数据
+- 自己的 [Longbridge](https://open.longbridge.com/) 权限，在应用容器内完成官方登录授权
 
 ### 2. 克隆并安装
 
@@ -131,10 +134,12 @@ COPILOTKIT_AGENT_MODEL=openai:qwen3.8-flash
 
 原生线程历史、托管追踪与学习需要配置自己的 `CPK_INTELLIGENCE_API_KEY`、`INTELLIGENCE_API_URL`、`INTELLIGENCE_GATEWAY_WS_URL`；更改相关集成开关后重新构建前端。没有 Intelligence 时，本地报告、任务和 checkpoint 与原生自由对话的线程发现功能仍是分开的。
 
-授权市场数据：
+初始化服务凭证并启动数据库、API、独立 worker 后，在容器内授权市场数据：
 
 ```powershell
-longbridge auth login
+npm run infra:init
+npm run services:up
+docker compose --env-file ../infra/.env -f ../infra/compose.yaml --profile application exec api longbridge auth login
 ```
 
 ### 4. 构建并启动
@@ -146,7 +151,7 @@ npm run start:all
 
 打开 **[http://localhost:3000](http://localhost:3000)**；FastAPI 默认监听 `127.0.0.1:8123`。先在设置中选择提供商、测试、保存启用，再开始研究。开发模式使用 `npm run dev`。
 
-正式构建使用 Webpack，启动器读取项目 `.env` 并补齐 Next.js standalone 静态资源。`LONGBRIDGE_CLI_PATH` 可指定 CLI 路径，`RESEARCH_DATA_DIR` 可指定持久化目录。
+正式构建使用 Webpack，启动器读取项目 `.env` 并补齐 Next.js standalone 静态资源。独立迁移服务先准备 PostgreSQL 业务与 checkpoint schema，再启动 API/worker。旧版 SQLite 用户按 [基础设施说明](infra/README.md) 做经过验证的离线迁移和切换，启动新库不会自动搬迁旧数据。
 
 ### 5. 完整研究路径
 
@@ -156,7 +161,7 @@ npm run start:all
 4. 就此报告追问，或在报告库对照已有研究。
 5. 复用候选与条件，或填写定时计划草稿。创建计划始终由用户明确操作。
 
-调度和自动条件核对需要 FastAPI 持续运行；删除任务或计划不会自动删除保存的报告。
+研究由独立 Celery worker 执行，API 重启不终止已提交任务。删除任务或计划会保留报告/历史。为迁移安全，自动调度默认暂停，「立刻运行」仍可手动试跑。验证后在 `infra/.env` 设置 `RESEARCH_SCHEDULER_ENABLED=true` 并运行 `npm run services:up`，持续运行 worker、Beat 与投递服务才能自动执行；主机休眠时本地服务不能运行。
 
 ## 架构与开发
 
@@ -169,21 +174,29 @@ flowchart LR
     Agent --> Research[证据 → 分析师 → 多空与风险审查 → 报告]
     Research --> Models[Qwen / DeepSeek / GLM]
     Research --> Sources[只读市场数据 + Python 指标]
-    Agent <--> SQLite[本机 SQLite: 报告、任务、计划、checkpoint]
+    Agent <--> PG[PostgreSQL: 业务与 checkpoint]
+    Agent --> Outbox[事务 outbox]
+    Outbox --> RabbitMQ
+    RabbitMQ --> Workers[独立 Celery workers]
+    Workers --> PG
+    Workers --> Research
+    Workers <--> Redis[临时市场数据缓存]
 ```
 
 模型解释证据；代码计算指标、调度时间、条件结果和报告价格对照。
 
 ### 数据与隐私
 
-- 报告、配置、缓存：`copilotkit-app/agent/data/research.sqlite3`。
-- LangGraph checkpoint：`copilotkit-app/agent/data/checkpoints.sqlite3`。
-- API key：服务端 `.env`，不写入报告记录，不通过设置 API 回传。
+- 报告、任务、计划和配置：PostgreSQL `research` schema；LangGraph checkpoint：PostgreSQL `agent` schema；市场数据缓存：有 TTL 的 Redis。
+- 旧 SQLite 文件仅供离线迁移，不作为运行回退；不使用 ChromaDB。
+- API key：忽略的服务端配置/私有应用卷，不写入报告或设置响应；Longbridge 授权保存在容器的私有 home 卷，不复制主机 token。
 - 模型调用会把相关问题和证据发送到所选服务商；托管 Intelligence 可以保存线程事件及追踪。本应用不是完全离线软件。
-- 请自行备份数据目录，不提交 `.env`、数据库、checkpoint 或私人研究材料。
+- 按 [基础设施说明](infra/README.md) 备份 PostgreSQL 和服务数据卷，不提交 `.env`、备份、凭证或私人研究材料。
 - 当前没有公网访问认证，上公网前仍需实现访问控制和用户隔离。
 
 ### 验证
+
+开发遵循 [Git/PR 规范](CONTRIBUTING.md)。本次 GitHub 交付按[四个逐点确认的检查点](docs/releases/knowledge-v0.2.md)执行：保存现有成果、完成 RAG/GraphRAG 验收、实现 App 内评测中心、最终验证并经 PR 合并；每点结束后等待用户确认。视觉、公司 Wiki/论点及增量知识跟踪留到下一版。当前分支为开发快照，不是已验收发行版。
 
 ```powershell
 cd copilotkit-app
@@ -193,7 +206,9 @@ cd agent
 uv run python -m unittest discover -s tests -v
 ```
 
-Python 测试覆盖研究边界、任务、计划、报告对照、复盘、追问与提供商配置。提供商单元测试使用临时目录和模拟失败；真实连接测试会消耗少量模型请求。
+Python 测试需要运行真实 PostgreSQL/Redis，使用独立测试库和缓存前缀，覆盖研究边界、任务、计划、报告对照、复盘、追问与提供商配置。提供商失败测试使用受控错误；真实连接测试会消耗少量模型请求。
+
+研究知识功能仍在持续开发：当前工作区已有在线集合/资料管理、限定范围混合检索、原生文档问答，以及第一条证据审核式 GraphRAG 管理及交互路径流程。关系自动抽取及明确身份审核已有实现和针对性测试，真实模型完整网页链路尚未验收。参阅[资料库](docs/document-library.md)、[图谱研究](docs/graph-research.md)和[验收矩阵](docs/validation/research-knowledge-validation.md)。完整知识生命周期、视觉核验、Wiki/论点、App 内评测及完整生产验收仍待完成；部分可运行链路不代表完整产品已交付。
 
 实际验收路径和未覆盖项见 [验收记录](copilotkit-app/VALIDATION.md)，剩余缺口见 [研究路线图](copilotkit-app/RESEARCH-ROADMAP.md)。本机构建成功不代表已经达到商业化生产服务要求。
 

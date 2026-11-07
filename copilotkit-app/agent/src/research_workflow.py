@@ -25,7 +25,9 @@ async def invoke_stage(stage_tool, arguments, config, name=None):
     # The native AG-UI bridge can then emit paired START/ARGS/END/RESULT events.
     actual = stage_tool.model_copy(update={"name": name}) if name and hasattr(stage_tool, "model_copy") else stage_tool
     tool_name = getattr(actual, "name", name or "research_stage")
-    result = await actual.ainvoke({"type": "tool_call", "id": str(uuid4()), "name": tool_name, "args": arguments}, config=config)
+    from .infrastructure.telemetry import operation
+    with operation(tool_name, kind="tool"):
+        result = await actual.ainvoke({"type": "tool_call", "id": str(uuid4()), "name": tool_name, "args": arguments}, config=config)
     return json.loads(result.content) if isinstance(result, ToolMessage) else result
 
 ROLE_GUIDANCE = {
@@ -173,6 +175,9 @@ async def execute_research(config: ResearchConfig, *, report_id=None, tool_confi
         "created_at": datetime.now(timezone.utc).isoformat(), "config": serialized, "status": "running",
         "stages": [{"id": s, "status": "pending"} for s in stages], "findings": {}, "assessment": None,
         "evidence": {"sources": [], "gaps": [], "bars": [], "metrics": {}}, "elapsed_seconds": 0}
+    from .infrastructure.telemetry import trace_details
+    if trace_details():
+        report["observability"] = trace_details()
     async def update(stage, status, detail=None):
         row = next(s for s in report["stages"] if s["id"] == stage)
         row.update(status=status, updated_at=datetime.now(timezone.utc).isoformat())

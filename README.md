@@ -56,6 +56,8 @@ The workbench retains **CopilotChat, native tool cards, AG-UI streaming, Generat
 
 Inspector, native thread history and the Intelligence learning integration use your configured **CopilotKit Intelligence** connection. Automatic Learning here means skill extraction and review/publishing, not automatic model training. Upstream integration demonstrations remain at `/playground`.
 
+Optional **Langfuse** exports metadata-only research/tool/model traces through OpenTelemetry. Configure `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and your regional `LANGFUSE_BASE_URL` in the server `.env`, then recreate services. Prompts, outputs, documents and reasoning are excluded; model token usage is recorded when available. Set `APERTURE_TRACING_ENABLED=false` to disable. This supplements Inspector; the in-app quality/performance evaluation center is still under development.
+
 ## Data
 
 | Source                                        | Current use                                                                                                       | Coverage and limitations                                                                                                                                    |
@@ -90,7 +92,7 @@ In **Settings → AI settings**:
 3. Select **Test connection**. It sends a short Chinese greeting using the current form, with no research tools, and shows success/reply/timing or a failure reason. It does not save or activate the draft. Tests wait at most 20 seconds.
 4. Select **Save & activate** to apply the profile to subsequent chat, research and follow-up model calls. It does not restart a completed research task.
 
-Keys entered in settings are written to the local server's ignored `copilotkit-app/.env`. Non-secret provider profiles are saved in SQLite. GLM aliases `GLM_API_KEY`, `ZAI_API_KEY`, `ZHIPUAI_API_KEY`, `GLM_BASE_URL` and `ZAI_BASE_URL` are also recognized; `ZHIPU_*` takes precedence. Provider-specific reasoning differences are handled by the adapter; for example, GLM-5.3 requires reasoning and uses low effort for the greeting test.
+Keys entered in settings are written to server-only `APERTURE_ENV_FILE` (a shared private file in the application volume for containers; local `.env` for native development). Workers read saved replacements without a restart. Non-secret profiles live in PostgreSQL. GLM aliases `GLM_API_KEY`, `ZAI_API_KEY`, `ZHIPUAI_API_KEY`, `GLM_BASE_URL` and `ZAI_BASE_URL` are also recognized; `ZHIPU_*` takes precedence. Provider-specific reasoning differences are handled by the adapter; for example, GLM-5.3 requires reasoning and uses low effort for the greeting test.
 
 A greeting verifies basic authentication and generation, not every model's tool-calling, structured output or research quality. API availability and account access can change.
 
@@ -100,8 +102,9 @@ A greeting verifies basic authentication and generation, not every model's tool-
 
 - **Node.js 20.19+** and npm
 - **Python 3.12+** and [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- **Docker Desktop with its Linux engine running** (the pinned development image currently targets amd64)
 - An API key for at least one supported AI provider
-- An installed and authorized [Longbridge CLI](https://open.longbridge.com/) for the primary market-data integration
+- Your own [Longbridge](https://open.longbridge.com/) access, authorized inside the application container for market data
 
 ### 2. Clone and prepare the app
 
@@ -133,10 +136,12 @@ COPILOTKIT_AGENT_MODEL=openai:qwen3.8-flash
 
 For native thread history, hosted tracing and learning, configure your own `CPK_INTELLIGENCE_API_KEY`, `INTELLIGENCE_API_URL` and `INTELLIGENCE_GATEWAY_WS_URL`. Rebuild the UI after changing integration flags. Without Intelligence, local reports/tasks/checkpoints remain separate from native free-chat thread discovery.
 
-Authorize market data on your machine:
+Initialize local service credentials once, then build/start the API, independent workers, broker and database services:
 
 ```powershell
-longbridge auth login
+npm run infra:init
+npm run services:up
+docker compose --env-file ../infra/.env -f ../infra/compose.yaml --profile application exec api longbridge auth login
 ```
 
 ### 4. Build and run
@@ -148,7 +153,7 @@ npm run start:all
 
 Open **[http://localhost:3000](http://localhost:3000)**. FastAPI listens on `127.0.0.1:8123`. Select your AI provider, test it, then save and activate before research. Development mode: `npm run dev`.
 
-The production build uses Webpack. The launcher loads project `.env` and prepares Next.js standalone static assets. Use `LONGBRIDGE_CLI_PATH` for a custom CLI location and `RESEARCH_DATA_DIR` for a different data directory.
+The production build uses Webpack. The launcher loads project `.env` and prepares Next.js standalone static assets. A one-shot migration service prepares PostgreSQL business and checkpoint schemas before API/workers start. Existing SQLite installations need the verified offline migration/cutover procedure in [infrastructure instructions](infra/README.md); starting a new database does not import old data automatically.
 
 ### 5. Follow a research through
 
@@ -158,7 +163,7 @@ The production build uses Webpack. The launcher loads project `.env` and prepare
 4. Ask a question about that report or compare saved reports in the library.
 5. Reuse candidates and conditions in a closing review or draft a schedule. Creating a schedule is always an explicit action.
 
-Schedulers and automatic checks need FastAPI to remain running. Removing a task or schedule does not automatically delete its saved reports.
+Submitted research runs in independent Celery workers and survives API restart. Removing a task or schedule preserves its reports/history. Automatic schedules and checks are initially paused for migration safety; after verification, set `RESEARCH_SCHEDULER_ENABLED=true` in `infra/.env` and run `npm run services:up`. Manual **Run now** works while scheduling is paused. Keep workers, Beat and dispatcher running for automation; host sleep stops local execution.
 
 ## Architecture
 
@@ -171,21 +176,29 @@ flowchart LR
     Agent --> Research[Evidence → analysts → bull/bear and risk review → report]
     Research --> Models[Qwen / DeepSeek / GLM]
     Research --> Sources[Read-only market data + Python calculations]
-    Agent <--> SQLite[Local SQLite: reports, tasks, schedules, checkpoints]
+    Agent <--> PostgreSQL[PostgreSQL: reports, plans and checkpoints]
+    Agent --> Outbox[Transactional outbox]
+    Outbox --> RabbitMQ
+    RabbitMQ --> Workers[Independent Celery workers]
+    Workers --> PostgreSQL
+    Workers --> Research
+    Workers <--> Redis[Disposable market cache]
 ```
 
 The model interprets evidence. Code computes technical indicators, schedules, condition outcomes and common-session comparisons.
 
 ## Local storage and privacy
 
-- Reports, preferences and cached data: `copilotkit-app/agent/data/research.sqlite3`.
-- LangGraph checkpoints: `copilotkit-app/agent/data/checkpoints.sqlite3`.
-- API keys: the ignored server `.env`; they are not stored in report records or returned by the settings API.
+- Reports, tasks and profiles: PostgreSQL `research` schema; native LangGraph checkpoints: PostgreSQL `agent` schema. Market-data cache: Redis with bounded TTL.
+- Legacy SQLite files are offline migration input only; the application has no SQLite/ChromaDB runtime fallback.
+- API keys: ignored server configuration/private application volume; never report records or settings responses. Longbridge credentials remain in the authorized container's private home volume.
 - Model calls send relevant prompts/evidence to the provider you configure. A hosted Intelligence connection can store native thread events and traces. This is not an offline-only application.
-- Back up your own data directory. Never commit `.env`, databases, checkpoints or private research artifacts.
+- Back up PostgreSQL and named service volumes following [infrastructure instructions](infra/README.md). Never commit `.env`, database dumps, credentials or private research artifacts.
 - There is no built-in public-service authentication. Keep the current application local until production access controls and user isolation are implemented.
 
 ## Development
+
+Follow the [Git and PR workflow](CONTRIBUTING.md). The next GitHub delivery is split into [four user-confirmed checkpoints](docs/releases/knowledge-v0.2.md): preserve the current implementation, finish RAG/GraphRAG acceptance, implement in-app evaluation, then validate and merge through a PR. Vision, company Wiki/theses and incremental knowledge tracking follow in a later release. This branch is a development checkpoint, not a completed release.
 
 ```powershell
 cd copilotkit-app
@@ -195,7 +208,9 @@ cd agent
 uv run python -m unittest discover -s tests -v
 ```
 
-The Python suite covers research boundaries, tasks, schedules, report comparison, market review, follow-ups and provider configuration. Provider unit tests use temporary storage and mocked network failures. A real connection test consumes a small model request.
+The Python suite uses isolated real PostgreSQL databases and namespaced Redis cache, so infrastructure must be running. It covers research boundaries, tasks, schedules, report comparison, market review, follow-ups and provider configuration. Provider failure tests use controlled failures; real connection checks consume a small model request.
+
+Research knowledge is under active development: this worktree includes online collections/documents, scoped hybrid retrieval, native document Q&A and the first evidence-reviewed GraphRAG management/interactive path workflow. Automatic relation extraction and explicit identity review are implemented with focused tests; their complete real-model browser workflow is not yet accepted. See [Document library](docs/document-library.md), [Graph research](docs/graph-research.md) and the [validation matrix](docs/validation/research-knowledge-validation.md). Complete knowledge lifecycle, visual verification, Wiki/theses, in-app evaluation and full production acceptance remain unfinished; partial working paths do not establish completion of the full product.
 
 See [validation notes](copilotkit-app/VALIDATION.md) for actual test paths and unverified areas, and the [research roadmap](copilotkit-app/RESEARCH-ROADMAP.md) for remaining gaps. Full commercial production readiness is not implied by a successful local build.
 
