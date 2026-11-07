@@ -106,6 +106,26 @@ class ExtractionTests(unittest.TestCase):
         self.assertEqual(self.repository.detail(self.key)["entity_count"],3)
         with self.assertRaises(StateConflict):self.extracts.resolve(self.key,candidate["id"],inputs)
 
+    def test_review_corrects_institution_type_and_preserves_model_proposal(self):
+        document=self.material("Synthetic Authority announced Synthetic Policy.")
+        graph=self.repository.detail(self.key)
+        self.repository.edit(self.key,GraphEdit(name=graph["name"],scope=ScopeRequest(document_ids=[document],as_of="2026-10-31"),
+            expected_revision=graph["revision"],reason="Synthetic authority fixture"))
+        proposal=output(source={"name":"Synthetic Authority","kind":"company","quote":"Synthetic Authority"},
+            target={"name":"Synthetic Policy","kind":"policy","quote":"Synthetic Policy"},relation_type="announced",
+            quote="Synthetic Authority announced Synthetic Policy.")
+        run=self.start();self.run_with(run,response=message([proposal]));candidate=self.candidate()
+        inputs=ResolveCandidate(expected_revision=candidate["revision"],reason="Correct institution classification",
+            source=IdentityResolution(mode="new",name="Synthetic Authority",kind="organization"),
+            target=IdentityResolution(mode="new",name="Synthetic Policy",kind="policy"),valid_from="2026-10-01",
+            explanation="Synthetic announcement, not a corporate ownership claim")
+        resolved=self.extracts.resolve(self.key,candidate["id"],inputs)
+        with transaction() as db:
+            authority=db.get(GraphEntity,resolved["resolution"]["source_id"])
+            self.assertEqual(authority.body["kind"],"organization")
+        self.assertEqual(self.extracts.candidate(self.key,candidate["id"])["body"]["source"]["kind"],"company")
+        self.assertEqual(resolved["relation"]["status"],"candidate")
+
     def test_interrupted_provider_reservation_is_not_replayed_and_prior_units_survive(self):
         second=self.material(graph_cases.TEXT)
         current=self.repository.detail(self.key)

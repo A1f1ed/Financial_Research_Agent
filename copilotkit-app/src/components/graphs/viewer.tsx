@@ -8,26 +8,44 @@ import {useKnowledgeResource} from "@/components/knowledge/shared";
 import {EntitySelector} from "./dialogs";
 import {graphLabel,type Evidence,type Graph,type GraphResult} from "./shared";
 
+function fitGraph(cy:Core){
+  cy.fit(undefined,55);
+  // A tiny graph should remain readable, rather than filling the canvas with
+  // oversized nodes and labels. Explicit zoom controls are still available.
+  if(cy.zoom()>1.25)cy.zoom(1.25);
+  cy.center();
+}
+
 function GraphCanvas({result,selected,onSelect}:{result:GraphResult;selected:string;onSelect:(id:string)=>void}){
   const c=useDocumentCopy();const host=useRef<HTMLDivElement>(null);const core=useRef<Core|null>(null);const callback=useRef(onSelect);callback.current=onSelect;
   const [error,setError]=useState("");
   useEffect(()=>{let cancelled=false;let resize:ResizeObserver|undefined;let observer:MutationObserver|undefined;
     void import("cytoscape").then(({default:cytoscape})=>{
       if(cancelled||!host.current)return;
-      const cy=cytoscape({container:host.current,elements:[...result.nodes.map(n=>({data:{id:n.id,label:n.name,kind:n.kind}})),...result.edges.map(e=>({data:{id:e.id,source:e.source_id,target:e.target_id,label:graphLabel(e.relation_type,c),assertion:e.assertion}}))],
-        layout:{name:"cose",animate:false,randomize:false,nodeRepulsion:()=>10000,idealEdgeLength:()=>130},minZoom:.2,maxZoom:3,userZoomingEnabled:false});core.current=cy;
+      // CoSE with randomize:false needs distinct initial positions; starting
+      // every new node at (0,0) leaves a symmetric small graph overlapping.
+      const radius=Math.max(160,result.nodes.length*18);
+      const cy=cytoscape({container:host.current,elements:[...result.nodes.map((n,i)=>({data:{id:n.id,label:n.name,kind:n.kind},position:{x:radius*Math.cos(2*Math.PI*i/result.nodes.length),y:radius*Math.sin(2*Math.PI*i/result.nodes.length)}})),...result.edges.map(e=>({data:{id:e.id,source:e.source_id,target:e.target_id,label:graphLabel(e.relation_type,c),assertion:e.assertion}}))],
+        layout:{name:"preset"},minZoom:.2,maxZoom:2,userZoomingEnabled:false});core.current=cy;
       const style=()=>{if(!host.current)return;const css=getComputedStyle(host.current);const foreground=css.getPropertyValue("--foreground").trim();const accent=css.getPropertyValue("--finance-accent").trim();const border=css.getPropertyValue("--finance-muted").trim();
         cy.style([{selector:"node",style:{"background-color":accent,"label":"data(label)","color":foreground,"font-size":12,"text-wrap":"wrap","text-max-width":"140px","text-valign":"bottom","text-margin-y":8,"width":30,"height":30}},
           {selector:"edge",style:{"width":2,"line-color":border,"target-arrow-color":accent,"target-arrow-shape":"triangle","curve-style":"bezier","label":"data(label)","font-size":10,"color":foreground,"text-rotation":"autorotate","text-margin-y":-10}},
           {selector:'edge[assertion="inferred"]',style:{"line-style":"dashed"}},
-          {selector:":selected",style:{"border-width":3,"border-color":foreground,"line-color":accent,"width":4}}]);};
-      style();cy.fit(undefined,60);if(cy.zoom()>1.5)cy.zoom(1.5);cy.center();cy.on("tap","node, edge",event=>callback.current(event.target.id()));
+          {selector:"node:selected",style:{"border-width":3,"border-color":foreground}},
+          {selector:"edge:selected",style:{"line-color":accent,"target-arrow-color":accent,"width":4}}]);};
+      style();
+      if(result.nodes.length<=12){
+        const degree=(id:string)=>result.edges.filter(e=>e.source_id===id||e.target_id===id).length;
+        const root=result.nodes.reduce((best,node)=>degree(node.id)>degree(best.id)?node:best,result.nodes[0]);
+        cy.layout({name:"breadthfirst",animate:false,directed:false,roots:root?[root.id]:undefined,nodeDimensionsIncludeLabels:true,spacingFactor:1.1,fit:false,stop:()=>fitGraph(cy)}).run();
+      }else cy.layout({name:"cose",animate:false,randomize:false,nodeDimensionsIncludeLabels:true,nodeRepulsion:()=>10000,idealEdgeLength:()=>130,gravity:.4,fit:false,stop:()=>fitGraph(cy)}).run();
+      cy.on("tap","node, edge",event=>callback.current(event.target.id()));
       resize=new ResizeObserver(()=>cy.resize());resize.observe(host.current);observer=new MutationObserver(style);observer.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
     }).catch(()=>{if(!cancelled)setError(c("Unable to load the interactive graph. The accessible lists remain available.","交互图加载失败，仍可使用下方实体与路径列表。"));});
     return()=>{cancelled=true;resize?.disconnect();observer?.disconnect();core.current?.destroy();core.current=null;};
   },[result,c]);
   useEffect(()=>{const cy=core.current;if(!cy)return;cy.elements().unselect();if(selected){const item=cy.getElementById(selected);item.select();cy.center(item);}},[selected]);
-  return <div className="graph-canvas-panel"><div className="workbench-actions"><button type="button" className="chat-config-toggle" onClick={()=>core.current?.fit(undefined,45)}><Focus size={14}/>{c("Fit graph","适配画布")}</button><button type="button" className="chat-config-toggle" aria-label={c("Zoom in","放大")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.min(3,cy.zoom()*1.2));}}><Plus size={14}/></button><button type="button" className="chat-config-toggle" aria-label={c("Zoom out","缩小")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.max(.2,cy.zoom()/1.2));}}><Minus size={14}/></button><small>{c("Solid: disclosure · dashed: inference · arrows: direction","实线：披露 · 虚线：推断 · 箭头：关系方向")}</small></div><div ref={host} className="graph-canvas" role="img" aria-label={c("Interactive relationship graph. Use the node and path lists below for keyboard navigation.","交互关系图。键盘操作请使用下方实体与路径列表。")}/>{error&&<p role="alert" className="error-banner">{error}</p>}</div>;
+  return <div className="graph-canvas-panel"><div className="workbench-actions"><button type="button" className="chat-config-toggle" onClick={()=>{if(core.current)fitGraph(core.current);}}><Focus size={14}/>{c("Fit graph","适配画布")}</button><button type="button" className="chat-config-toggle" aria-label={c("Zoom in","放大")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.min(2,cy.zoom()*1.2));}}><Plus size={14}/></button><button type="button" className="chat-config-toggle" aria-label={c("Zoom out","缩小")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.max(.2,cy.zoom()/1.2));}}><Minus size={14}/></button><small>{c("Solid: disclosure · dashed: inference · arrows: direction","实线：披露 · 虚线：推断 · 箭头：关系方向")}</small></div><div ref={host} className="graph-canvas" role="img" aria-label={c("Interactive relationship graph. Use the node and path lists below for keyboard navigation.","交互关系图。键盘操作请使用下方实体与路径列表。")}/>{error&&<p role="alert" className="error-banner">{error}</p>}</div>;
 }
 
 export function GraphViewer({graph,onManage,onEvidence}:{graph:Graph;onManage:(objectId?:string)=>void;onEvidence:(e:Evidence)=>void}){

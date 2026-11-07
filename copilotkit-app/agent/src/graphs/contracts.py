@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from src.knowledge.contracts import CollectionInput, ScopeRequest
 
-EntityKind = Literal["company", "group", "brand", "product", "region", "policy", "event", "industry"]
+EntityKind = Literal["company", "group", "brand", "product", "region", "policy", "event", "industry", "organization"]
 RelationKind = Literal["owns", "brand_of", "produces", "operates_in", "supplies", "customer_of", "applies_to", "announced", "supersedes", "may_affect"]
 RELATION_TYPES = list(RelationKind.__args__)
 
