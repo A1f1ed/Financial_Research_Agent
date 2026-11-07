@@ -10,6 +10,16 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from uuid import uuid4
 
+
+class TurnIdentityTests(unittest.TestCase):
+    def test_missing_ids_do_not_share_retrieval_between_repeated_questions(self):
+        from src.knowledge.conversations import turn_id
+        from langchain_core.messages import HumanMessage, AIMessage
+        first=[HumanMessage(content="same question")]
+        second=[*first,AIMessage(content="prior answer"),HumanMessage(content="same question")]
+        self.assertNotEqual(turn_id(first),turn_id(second))
+        self.assertEqual(turn_id(second),turn_id([*second,AIMessage(content="tool progress")]))
+
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -111,6 +121,20 @@ class DocumentChatTests(unittest.IsolatedAsyncioTestCase):
         inputs=ConversationRequest(thread_id=uuid4(),collection_ids=[self.collection["id"]],as_of="2026-10-31")
         with transaction() as db: db.add(Report(id=str(inputs.thread_id),body={"id":str(inputs.thread_id)},archived=False))
         with self.assertRaises(StateConflict): ConversationRepository().create(inputs)
+
+    async def test_failed_retrieval_is_saved_without_claiming_the_original_lacks_an_answer(self):
+        self.material("Synthetic cash flow evidence")
+        binding,_=self.create_binding();runtime=self.runtime(binding["thread_id"])
+        with patch("src.knowledge.tools.search",side_effect=TimeoutError("synthetic provider message must not be retained")):
+            command=await search_research_documents.coroutine("cash flow",runtime)
+        output=json.loads(command.update["messages"][0].content)
+        self.assertEqual(output["status"],"retrieval_failed");self.assertTrue(output["attempt_id"])
+        saved=ConversationRepository().searches(binding["thread_id"],turn_id="synthetic-question")
+        self.assertEqual(saved[0]["status"],"retrieval_failed");self.assertEqual(saved[0]["hits"],[])
+        self.assertNotIn("synthetic provider message",json.dumps(saved))
+        answer=ModelResponse(result=[AIMessage(content="The source has no answer.")])
+        corrected=validate_response(SimpleNamespace(messages=runtime.state["messages"]),answer,binding["thread_id"])
+        self.assertIn("retrieval service could not complete",corrected.result[-1].text.lower())
 
     async def test_native_graph_uses_real_tool_with_server_scope_despite_client_state(self):
         key=self.material("Synthetic inventory provision evidence"); await self.build(key)

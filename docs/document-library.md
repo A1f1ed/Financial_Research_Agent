@@ -48,6 +48,16 @@ Typed financial calculations, comprehensive answer-quality evaluation and resear
 
 Endpoints: `GET/PUT knowledge/embedding`, `POST knowledge/embedding/test`, `GET/POST knowledge/indices`, `POST knowledge/search`, `GET knowledge/searches/{id}` under `/research/`. The Next.js proxy permits only these fixed routes. A dedicated `knowledge-worker` handles indexing; the parser worker remains keyless. [pgvector documents exact search and variable-dimension storage](https://github.com/pgvector/pgvector); vector spaces are separated by configuration fingerprints rather than mixed in a single query.
 
+## Reviewed numeric inputs and calculations
+
+In a collection, search evidence and choose **Review numeric input**. Inspect the original page, select the exact printed value and explicit unit evidence, then confirm metric, period and consolidation/attribution basis. The model cannot perform this human-review action. Code validates original text spans and source revisions; it does not infer table columns or certify financial meaning. A complete unit such as `千元人民币` cannot be truncated to `元人民币`.
+
+**Reviewed figures & calculations** supports ordered inputs, signed additions/reversals, scale conversion, differences, ratios and compatible period/year-over-year changes. It rejects incompatible currencies, issuers, bases and periods. Original printed values stay unchanged; signed sums retain the explicit `+1/-1` choices. Every result preserves Decimal arithmetic version, formula, input interpretation, source pages and unit evidence. Archiving inputs blocks new calculations while retaining earlier results. Source changes or removed membership make inputs unavailable until reviewed again.
+
+Fixed-scope native document chats can list reviewed inputs, read bounded source context and call the same calculator. Label mismatch can return bounded recent inputs within the same approved document versions; this does not broaden scope. Missing reviewed inputs require review instead of model arithmetic. Retrieval service failure is persisted separately from a successful search with insufficient evidence.
+
+Routes under `/research/knowledge/collections/{id}`: `GET figure-context/{search_id}/{K-id}`, `GET/POST figures`, `POST figures/{figure_id}/archive|restore`, and `GET/POST calculations`. The Next.js proxy explicitly permits only these route shapes. This feature does not yet establish complete research-task integration; see the current validation record.
+
 ## Network configuration
 
 The default is system DNS. Some VPNs return synthetic `198.18.*` addresses; these are non-public and are deliberately rejected. For that environment, set this **deployment setting** in the ignored `infra/.env` and recreate the document worker:

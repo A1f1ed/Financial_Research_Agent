@@ -1,10 +1,58 @@
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Path, Query, Request
 from uuid import UUID
 from src.documents.api import authorize_write, run
 from .contracts import CollectionAction, CollectionEdit, CollectionInput, ConversationRequest, IndexRequest, MembershipChange, ScopeRequest, SearchRequest
 from .repository import CollectionRepository
+from .calculations import FigureInput, FigureAction, CalculationInput
+from .figures import FigureRepository
+from fastapi import HTTPException
 
 router = APIRouter(prefix="/research/knowledge")
+
+
+def numeric_operation(action):
+    try: return run(action)
+    except ValueError as error: raise HTTPException(422, str(error)) from None
+
+
+@router.get("/collections/{key}/figure-context/{search_id}/{citation_id}")
+def figure_context(key: UUID, search_id: UUID, citation_id: str = Path(pattern=r"^K[1-9][0-9]*$")):
+    return run(lambda: FigureRepository().context(str(key), str(search_id), citation_id))
+
+
+@router.get("/collections/{key}/figures")
+def figures(key: UUID, q: str = Query(default="", max_length=160), archived: bool = False,
+            page: int = Query(default=1, ge=1, le=100000), page_size: int = Query(default=20, ge=1, le=100)):
+    return run(lambda: FigureRepository().list(str(key), q=q, archived=archived, page=page, page_size=page_size))
+
+
+@router.post("/collections/{key}/figures", status_code=201)
+def review_figure(key: UUID, inputs: FigureInput, request: Request):
+    authorize_write(request)
+    return numeric_operation(lambda: FigureRepository().create(str(key), inputs))
+
+
+@router.post("/collections/{key}/figures/{figure_id}/archive")
+def archive_figure(key: UUID, figure_id: UUID, inputs: FigureAction, request: Request):
+    authorize_write(request)
+    return run(lambda: FigureRepository().archive(str(key), str(figure_id), inputs))
+
+
+@router.post("/collections/{key}/figures/{figure_id}/restore")
+def restore_figure(key: UUID, figure_id: UUID, inputs: FigureAction, request: Request):
+    authorize_write(request)
+    return run(lambda: FigureRepository().archive(str(key), str(figure_id), inputs, False))
+
+
+@router.get("/collections/{key}/calculations")
+def calculations(key: UUID, page: int = Query(default=1, ge=1, le=100000), page_size: int = Query(default=20, ge=1, le=100)):
+    return run(lambda: FigureRepository().calculations(str(key), page=page, page_size=page_size))
+
+
+@router.post("/collections/{key}/calculations", status_code=201)
+def calculate(key: UUID, inputs: CalculationInput, request: Request):
+    authorize_write(request)
+    return numeric_operation(lambda: FigureRepository().calculate(str(key), inputs))
 
 
 @router.get("/collections")

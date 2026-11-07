@@ -5,6 +5,7 @@ import { ArrowUpRight, Database, LoaderCircle, RefreshCw, Search } from "lucide-
 import { researchRequest } from "@/components/workbench-panels";
 import { useDocumentCopy } from "@/components/documents/shared";
 import type { Collection } from "./shared";
+import {ReviewFigure,ReviewedFigures} from "./figures";
 
 type Index = { id: string; document_id: string; job_id: string; mode: string; status: string; published: boolean; chunk_count: number; omitted_pages: number; error?: string };
 type Hit = { citation_id: string; document_id: string; title: string; document_version: number; page_number: number; quote: string; published_on: string | null; published_at: string | null; publication_warning: string | null };
@@ -13,6 +14,7 @@ type Material = { id: string; title: string; archived: boolean; status: string }
 const indexStatuses: Record<string, [string, string]> = { queued: ["Queued", "排队中"], running: ["Running", "运行中"], complete: ["Complete", "已完成"], failed: ["Failed", "失败"], cancelled: ["Cancelled", "已停止"] };
 
 export function CollectionSearch({ collection, onDocument, onTask }: { collection: Collection; onDocument: (id: string, page: number) => void; onTask: (id: string) => void }) {
+  const [reviewFigure,setReviewFigure]=useState<{searchId:string;citationId:string}|null>(null);const [figureRevision,setFigureRevision]=useState(0);
   const c = useDocumentCopy(); const [documents, setDocuments] = useState<Material[]>([]); const [total, setTotal] = useState(0); const [indices, setIndices] = useState<Index[]>([]);
   const [selected, setSelected] = useState<string[]>([]); const [mode, setMode] = useState("keyword"); const [verified, setVerified] = useState(false);
   const [query, setQuery] = useState(""); const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA")); const [market, setMarket] = useState("HK");
@@ -85,9 +87,11 @@ export function CollectionSearch({ collection, onDocument, onTask }: { collectio
     </form>
     {visibleResult && <div aria-live="polite" className="knowledge-search-results"><p>{visibleResult.scope.eligible_count} {c("eligible versions", "个合规版本")} · {visibleResult.scope.excluded_count} {c("excluded by scope/date", "个被范围/日期排除")} · {visibleResult.elapsed_ms.toFixed(0)} ms</p>
       {!visibleResult.hits.length && <p>{c("No matching excerpts. Review the query, cutoff and index coverage; this does not establish that a fact is absent from the originals.", "未检索到匹配摘录。请检查问题、日期与索引覆盖；这不能证明原文不存在该事实。")}</p>}
-      {visibleResult.hits.map(hit => <article className="knowledge-hit" key={hit.citation_id}><div className="workbench-item-head"><strong>[{hit.citation_id}] {hit.title}</strong><button className="chat-config-toggle" onClick={() => onDocument(hit.document_id, hit.page_number)}>{c("Open original", "打开原文")} · p{hit.page_number}</button></div><small>v{hit.document_version} · PDF {hit.page_number} · {hit.published_at || hit.published_on || c("Publication unknown", "公开日期未知")}</small><blockquote>{hit.quote}</blockquote></article>)}
+      {visibleResult.hits.map(hit => <article className="knowledge-hit" key={hit.citation_id}><div className="workbench-item-head"><strong>[{hit.citation_id}] {hit.title}</strong><button className="chat-config-toggle" onClick={() => onDocument(hit.document_id, hit.page_number)}>{c("Open original", "打开原文")} · p{hit.page_number}</button></div><small>v{hit.document_version} · PDF {hit.page_number} · {hit.published_at || hit.published_on || c("Publication unknown", "公开日期未知")}</small><blockquote>{hit.quote}</blockquote><button className="chat-config-toggle" disabled={collection.archived} onClick={()=>setReviewFigure({searchId:visibleResult.id,citationId:hit.citation_id})}>{c("Review numeric input","核实数字输入")}</button></article>)}
       {visibleResult.gaps.length > 0 && <div className="coverage-warning">{c("Coverage gaps", "覆盖缺口")}: {visibleResult.gaps.map((gap,i) => <p key={i}>{gap.title || ""} {gap.reason === "matching_index_missing" ? c("Matching index missing", "缺少匹配索引") : c(`${gap.pages} pages not text-readable`, `${gap.pages} 页非文字可读`)}</p>)}</div>}
       <small className="muted">{c("Saved search", "已保存检索")}: {visibleResult.id} · {c("Source candidates, not a generated financial conclusion.", "以上为原文候选证据，并非生成的金融结论。")}</small>
     </div>}
+    <ReviewedFigures collection={collection} revision={figureRevision} onDocument={onDocument}/>
+    {reviewFigure&&<ReviewFigure collectionId={collection.id} searchId={reviewFigure.searchId} citationId={reviewFigure.citationId} onClose={()=>setReviewFigure(null)} onSaved={()=>{setReviewFigure(null);setFigureRevision(v=>v+1);}} onDocument={onDocument}/>}
   </section>;
 }

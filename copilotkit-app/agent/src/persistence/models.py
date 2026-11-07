@@ -229,6 +229,31 @@ class ConversationSearch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class KnowledgeFigure(Ordered, Base):
+    __tablename__ = "knowledge_figures"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    collection_id: Mapped[str] = mapped_column(ForeignKey("research.knowledge_collections.id"), index=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("research.documents.id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    body: Mapped[dict] = mapped_column(JSONB)
+    audit: Mapped[list[dict]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (UniqueConstraint("collection_id", "fingerprint", name="uq_knowledge_figures_collection_fingerprint"),)
+
+
+class KnowledgeCalculation(Ordered, Base):
+    __tablename__ = "knowledge_calculations"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    collection_id: Mapped[str] = mapped_column(ForeignKey("research.knowledge_collections.id"), index=True)
+    thread_id: Mapped[str | None] = mapped_column(String(160), index=True)
+    turn_id: Mapped[str | None] = mapped_column(String(160), index=True)
+    request: Mapped[dict] = mapped_column(JSONB)
+    result: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class HiddenTask(Base):
     __tablename__ = "hidden_tasks"
     id: Mapped[str] = mapped_column(String(160), primary_key=True)

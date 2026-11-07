@@ -11,7 +11,7 @@ export type CitationSelection = { searchId: string; citationId: string };
 type Source = { id: string; title: string; version: number; eligible: boolean };
 type Binding = { thread_id: string; search_mode: string; scope: { as_of: string | null; as_of_at: string | null; market: string; mode: string };
   snapshot: { collections: { id: string; name: string }[]; documents: Source[]; eligible_count: number; excluded_count: number } };
-type Search = { id: string; query: string; created_at: string; hits: { citation_id: string; title: string; page_number: number; document_version: number }[]; gaps: unknown[] };
+type Search = { id: string; query: string; created_at: string; status?:string; hits: { citation_id: string; title: string; page_number: number; document_version: number }[]; gaps: unknown[] };
 type Snapshot = { binding: Binding | null; search_count: number; searches: Search[] };
 
 function EvidenceHistory({ snapshot, onClose, onCitation }: { snapshot: Snapshot; onClose: () => void; onCitation: (value: CitationSelection) => void }) {
@@ -20,7 +20,7 @@ function EvidenceHistory({ snapshot, onClose, onCitation }: { snapshot: Snapshot
   return <dialog ref={dialog} className="document-confirm-dialog knowledge-chat-evidence-dialog" aria-label={c("Conversation evidence history", "会话证据历史")} onCancel={onClose}>
     <div className="workbench-item-head"><h2>{c("Evidence used in this conversation", "本会话已使用的证据")}</h2><button className="chat-config-toggle" onClick={onClose} aria-label={c("Close used evidence", "关闭已用证据")}><X size={16} /></button></div>
     <p className="field-note">{c("Most recent 20 retrievals, including historical snapshots. Opening evidence does not rerun a tool or model.", "显示最近 20 次检索及历史快照；打开证据不会重跑工具或模型。")}</p>
-    <div className="knowledge-chat-evidence">{snapshot.searches.map(item => <article key={item.id}><strong>{item.query}</strong><small>{new Date(item.created_at).toLocaleString()}</small>{item.hits.map(hit => <button className="chat-config-toggle" key={hit.citation_id} onClick={() => { onClose(); onCitation({searchId:item.id,citationId:hit.citation_id}); }}>[{hit.citation_id}] {hit.title} · v{hit.document_version} · PDF {hit.page_number}</button>)}{!item.hits.length && <p>{c("No matching evidence was retrieved.", "当次未检索到匹配证据。")}</p>}</article>)}
+    <div className="knowledge-chat-evidence">{snapshot.searches.map(item => <article key={item.id}><strong>{item.query}</strong><small>{new Date(item.created_at).toLocaleString()}</small>{item.hits.map(hit => <button className="chat-config-toggle" key={hit.citation_id} onClick={() => { onClose(); onCitation({searchId:item.id,citationId:hit.citation_id}); }}>[{hit.citation_id}] {hit.title} · v{hit.document_version} · PDF {hit.page_number}</button>)}{!item.hits.length && <p className={item.status?"error-banner":""}>{item.status==="retrieval_failed"?c("Retrieval failed; this does not establish that the originals lack an answer.","检索失败，这不表示原文中没有答案。"):item.status==="evidence_unavailable"?c("The bound evidence scope was unavailable.","绑定的证据范围当时不可用。"):c("No matching evidence was retrieved.", "当次未检索到匹配证据。")}</p>}</article>)}
       {!snapshot.search_count ? <p>{c("Evidence appears after a real retrieval tool call.", "真实检索工具运行后将在此显示证据。")}</p> : !snapshot.searches.length && <p role="status">{c("Reading saved evidence…", "正在读取已保存证据…")}</p>}</div>
   </dialog>;
 }

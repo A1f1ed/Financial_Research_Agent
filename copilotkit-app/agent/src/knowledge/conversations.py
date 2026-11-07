@@ -1,5 +1,7 @@
 """Immutable server-owned document-chat scopes and real retrieval references."""
 import json
+from datetime import datetime, timezone
+from uuid import uuid4
 from uuid import UUID
 
 from sqlalchemy import func, select, text
@@ -82,10 +84,31 @@ class ConversationRepository:
         with transaction(self.bind) as db:
             return db.scalar(select(func.count()).select_from(ConversationSearch).where(ConversationSearch.thread_id == thread_id))
 
+    def retrieval_failure(self, thread_id, turn, query, status, error_code):
+        """Persist failure classification, not provider exception text or a fake hit."""
+        with transaction(self.bind) as db:
+            binding=db.get(KnowledgeConversation,thread_id)
+            if binding is None:return None
+            scope={**binding.scope,"collection_ids":[],"document_ids":[d["id"] for d in binding.snapshot["documents"]],"search_mode":binding.search_mode}
+            key=str(uuid4())
+            result={"id":key,"query":query[:500],"status":status,"error_code":error_code,"hits":[],
+                "gaps":[{"reason":status}],"scope":{"eligible_count":None,"excluded_count":None},
+                "created_at":datetime.now(timezone.utc).isoformat(),"elapsed_ms":None}
+            db.add(KnowledgeSearch(id=key,query=query[:500],scope=scope,result=result));db.flush()
+            db.add(ConversationSearch(thread_id=thread_id,turn_id=turn,search_id=key))
+            return key
+
 
 def turn_id(messages):
-    for message in reversed(messages):
-        if getattr(message, "type", None) == "human": return str(message.id or "unidentified-turn")[:160]
+    for index in range(len(messages)-1,-1,-1):
+        message=messages[index]
+        if getattr(message,"type",None)=="human":
+            if message.id:return str(message.id)[:160]
+            # Some API clients omit message IDs. Repeated identical questions
+            # must still not inherit a previous turn's retrieval/calculations.
+            import hashlib
+            payload=json.dumps([index,message.content],ensure_ascii=False,sort_keys=True,default=str)
+            return "derived-"+hashlib.sha256(payload.encode()).hexdigest()
     return "unidentified-turn"
 
 

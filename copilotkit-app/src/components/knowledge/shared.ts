@@ -11,7 +11,7 @@ export type Collection = {
     references: number; semantic_index: string };
 };
 
-export function useKnowledgeResource<T>(path: string | null, revision: number) {
+export function useKnowledgeResource<T>(path: string | null, revision: number, pollMs=10000) {
   const c = useDocumentCopy();
   const [state, setState] = useState<{ path: string | null; data: T | null; error: string; loading: boolean }>({ path: null, data: null, error: "", loading: true });
   useEffect(() => {
@@ -25,11 +25,11 @@ export function useKnowledgeResource<T>(path: string | null, revision: number) {
         const data = await researchRequest<T>(path, "GET", undefined, controller.signal);
         if (!controller.signal.aborted) setState({ path, data, error: "", loading: false });
       } catch (err) { if (!controller.signal.aborted) setState(previous => ({ ...previous, error: errorText(err, c), loading: false })); }
-      finally { pending = false; if (!controller.signal.aborted && !document.hidden) timer = setTimeout(() => void load(), 10000); }
+      finally { pending = false; if (!controller.signal.aborted && !document.hidden && pollMs>0) timer = setTimeout(() => void load(), pollMs); }
     };
     const visibility = () => { if (document.hidden) clearTimeout(timer); else void load(); };
     document.addEventListener("visibilitychange", visibility); void load(true);
     return () => { controller.abort(); clearTimeout(timer); document.removeEventListener("visibilitychange", visibility); };
-  }, [path, revision, c]);
+  }, [path, revision, c, pollMs]);
   return state.path === path ? state : { path, data: null, error: "", loading: true };
 }
