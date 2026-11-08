@@ -1,0 +1,71 @@
+name: Verification
+
+on:
+  pull_request:
+  push:
+    branches: [main, 'codex/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verification-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend build and stream checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: copilotkit-app
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      COPILOTKIT_TELEMETRY_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: copilotkit-app/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npx tsc --noEmit
+      - run: npx tsx scripts/test-agent-stream.mts
+      - run: npx tsx scripts/test-graph-evidence-selection.mts
+      - run: node --test scripts/finalize-build.test.mjs
+
+  backend:
+    name: Python and real-service integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: copilotkit-app/agent
+    env:
+      APERTURE_TRACING_ENABLED: 'false'
+      RESEARCH_SCHEDULER_ENABLED: 'false'
+      APERTURE_RUN_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: copilotkit-app/agent/uv.lock
+      - run: uv sync --locked
+      - name: Create disposable CI service configuration
+        run: python ../scripts/init_infra.py
+      - name: Start pinned real services
+        run: docker compose --env-file ../../infra/.env -f ../../infra/compose.yaml up -d --wait --wait-timeout 180
+      - name: Domain tests
+        run: uv run --locked python -m unittest discover -s tests -v
+      - name: Integration, schema and recovery tests
+        run: uv run --locked python -m unittest discover -s integration_tests -v
+      - name: Remove disposable CI containers and volumes
+        if: always()
+        run: docker compose --env-file ../../infra/.env -f ../../infra/compose.yaml down -v
