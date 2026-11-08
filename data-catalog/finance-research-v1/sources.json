@@ -1,0 +1,243 @@
+[
+  {
+    "id": "byd_2024_annual",
+    "issuer": "BYD Company Limited",
+    "symbols": [
+      "1211.HK",
+      "002594.SZ"
+    ],
+    "kind": "annual_report",
+    "period_end": "2024-12-31",
+    "published_on": "2025-03-24",
+    "publication_precision": "day",
+    "publication_basis": "HKEX dated disclosure URL",
+    "languages": [
+      "en",
+      "zh-Hant"
+    ],
+    "title": "BYD Annual Report 2024",
+    "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0324/2025032401238.pdf",
+    "landing_url": "https://www.bydglobal.com/en/InvestorAnnals.html?scroll=true",
+    "use_cases": [
+      "financial_statement_qa",
+      "financial_table_vision",
+      "company_wiki"
+    ]
+  },
+  {
+    "id": "byd_2025_interim",
+    "issuer": "BYD Company Limited",
+    "symbols": [
+      "1211.HK",
+      "002594.SZ"
+    ],
+    "kind": "interim_report",
+    "period_end": "2025-06-30",
+    "published_on": "2025-08-29",
+    "publication_precision": "day",
+    "publication_basis": "HKEX dated disclosure URL and issuer announcement date",
+    "languages": [
+      "en",
+      "zh-Hant"
+    ],
+    "title": "BYD Interim Report 2025",
+    "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0829/2025082902252.pdf",
+    "landing_url": "https://www.bydglobal.com/cn/investor-relations?scroll=true",
+    "use_cases": [
+      "cross_period_qa",
+      "restatement_checks",
+      "company_wiki"
+    ]
+  },
+  {
+    "id": "byd_2026_impairment",
+    "issuer": "BYD Company Limited",
+    "symbols": [
+      "1211.HK",
+      "002594.SZ"
+    ],
+    "kind": "impairment_announcement",
+    "period_end": "2026-09-30",
+    "published_on": "2026-10-29",
+    "published_at": "2026-10-29T10:16:00Z",
+    "publication_precision": "second",
+    "publication_basis": "Longbridge filing metadata linked to HKEX original",
+    "languages": [
+      "zh-Hant",
+      "zh-Hans"
+    ],
+    "title": "BYD Overseas Regulatory Announcement: Credit and Asset Impairment Losses, January-September 2026",
+    "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1029/2026102901026_c.pdf",
+    "landing_url": "https://www.hkexnews.hk/",
+    "use_cases": [
+      "announcement_qa",
+      "impairment_table_vision",
+      "company_wiki_change_tracking"
+    ],
+    "notes": "Document type verified from original first page: impairment announcement, not the full third-quarter financial report."
+  },
+  {
+    "id": "byd_2026_10_sales",
+    "issuer": "BYD Company Limited",
+    "symbols": [
+      "1211.HK",
+      "002594.SZ"
+    ],
+    "kind": "monthly_operating_announcement",
+    "period_end": "2026-10-31",
+    "published_on": "2026-11-01",
+    "published_at": "2026-11-01T10:17:00Z",
+    "publication_precision": "second",
+    "publication_basis": "Longbridge filing metadata and issuer date on PDF",
+    "languages": [
+      "zh-Hant"
+    ],
+    "title": "BYD Voluntary Announcement: October 2026 Production and Sales Volume",
+    "url": "https://www1.hkexnews.hk/listedco/listconews/sehk/2026/1101/2026110100044_c.pdf",
+    "landing_url": "https://www.hkexnews.hk/",
+    "use_cases": [
+      "cutoff_leakage_negative_case",
+      "operating_table_vision",
+      "announcement_qa"
+    ],
+    "notes": "October operating period but November publication: exclude from research as of 2026-10-31."
+  },
+  {
+    "id": "geely_2024_annual",
+    "issuer": "Geely Automobile Holdings Limited",
+    "symbols": [
+      "175.HK"
+    ],
+    "kind": "annual_report",
+    "period_end": "2024-12-31",
+    "published_on": "2025-04-28",
+    "publication_precision": "day",
+    "publication_basis": "HKEX dated disclosure URL (not fiscal year-end or audit date)",
+    "languages": [
+      "en"
+    ],
+    "title": "Geely Automobile Annual Report 2024",
+    "url": "https://www.hkexnews.hk/listedco/listconews/sehk/2025/0428/2025042800039.pdf",
+    "landing_url": "https://geelyauto.com.hk/financial-documents/",
+    "use_cases": [
+      "peer_comparison",
+      "financial_statement_qa",
+      "entity_extraction"
+    ]
+  },
+  {
+    "id": "geely_2025_interim",
+    "issuer": "Geely Automobile Holdings Limited",
+    "symbols": [
+      "175.HK"
+    ],
+    "kind": "interim_report",
+    "period_end": "2025-06-30",
+    "published_on": null,
+    "publication_precision": "unknown",
+    "publication_basis": "Issuer PDF verified; exact public release date has not been independently confirmed. Audit/report date is not a publication date.",
+    "languages": [
+      "en"
+    ],
+    "title": "Geely Automobile Interim Report 2025",
+    "url": "https://www.geelyauto.com.hk/wp-content/uploads/2025/08/e00175_2025-Interim-Report.pdf",
+    "landing_url": "https://geelyauto.com.hk/financial-documents/",
+    "use_cases": [
+      "presentation_reconciliation",
+      "restatement_checks",
+      "financial_table_vision"
+    ],
+    "notes": "Exclude from strict as-of retrieval until publication date is verified."
+  },
+  {
+    "id": "geely_2024_results_presentation",
+    "issuer": "Geely Automobile Holdings Limited",
+    "symbols": [
+      "175.HK"
+    ],
+    "kind": "results_presentation",
+    "period_end": "2024-12-31",
+    "published_on": "2025-03-20",
+    "publication_precision": "day",
+    "publication_basis": "Issuer presentation archive dated row",
+    "languages": [
+      "en"
+    ],
+    "title": "Geely Presentation on 2024 Annual Results",
+    "url": "https://www.geelyauto.com.hk/wp-content/uploads/2025/03/20250320%E3%80%90EN%E3%80%9103201533%E5%85%A8%E5%B9%B4%E4%B8%9A%E7%BB%A9%E5%8F%91%E5%B8%83%E6%8C%82%E7%BD%91%E8%8B%B1%E6%96%87%E7%89%88_%E5%90%89%E5%88%A9%E6%B1%BD%E8%BD%A6%E9%9B%86%E5%9B%A2Final.pdf",
+    "landing_url": "https://geelyauto.com.hk/presentation/",
+    "use_cases": [
+      "chart_vision",
+      "presentation_comparison",
+      "forward_looking_vs_actual"
+    ]
+  },
+  {
+    "id": "geely_2025_interim_presentation",
+    "issuer": "Geely Automobile Holdings Limited",
+    "symbols": [
+      "175.HK"
+    ],
+    "kind": "results_presentation",
+    "period_end": "2025-06-30",
+    "published_on": "2025-08-14",
+    "publication_precision": "day",
+    "publication_basis": "Issuer presentation archive and cover date",
+    "languages": [
+      "en"
+    ],
+    "title": "Geely Presentation on 2025 Interim Results",
+    "url": "https://www.geelyauto.com.hk/wp-content/uploads/2025/08/2025-Interim-Results-PPT_20250814_E.pdf",
+    "landing_url": "https://geelyauto.com.hk/presentation/",
+    "use_cases": [
+      "chart_vision",
+      "cashflow_bridge",
+      "entity_relationship_candidates",
+      "presentation_reconciliation"
+    ]
+  },
+  {
+    "id": "eu_2024_ev_provisional_release",
+    "issuer": "European Commission",
+    "symbols": [],
+    "kind": "official_policy_press_release",
+    "period_end": null,
+    "published_on": "2024-07-04",
+    "publication_precision": "day",
+    "publication_basis": "Dated original Commission press release",
+    "languages": [
+      "en"
+    ],
+    "title": "European Commission: Provisional Countervailing Duties on Chinese BEVs",
+    "url": "https://ec.europa.eu/commission/presscorner/api/files/document/print/en/ip_24_3630/IP_24_3630_EN.pdf",
+    "landing_url": "https://ec.europa.eu/commission/presscorner/home/en",
+    "use_cases": [
+      "graphrag_entity_relations",
+      "cross_company_event_qa",
+      "policy_stage_versioning"
+    ],
+    "notes": "Historical press release, not the current consolidated legal text. Preserve provisional versus definitive stage; corporate group and listed subsidiary identities require review."
+  },
+  {
+    "id": "eu_2024_ev_definitive_release",
+    "issuer": "European Commission",
+    "symbols": [],
+    "kind": "official_policy_press_release",
+    "period_end": null,
+    "published_on": "2024-10-29",
+    "publication_precision": "day",
+    "publication_basis": "Dated original Commission press release",
+    "languages": [
+      "en"
+    ],
+    "title": "European Commission: Definitive Countervailing Duties on Chinese BEVs",
+    "url": "https://ec.europa.eu/commission/presscorner/api/files/document/print/en/ip_24_5589/IP_24_5589_EN.pdf",
+    "landing_url": "https://ec.europa.eu/commission/presscorner/home/en",
+    "use_cases": [
+      "graphrag_entity_relations",
+      "cross_company_event_qa",
+      "policy_stage_versioning"
+    ],
+    "notes": "Historical press release, not the current consolidated legal text. Preserve provisional versus definitive stage; corporate group and listed subsidiary identities require review."
+  }
+]

@@ -73,7 +73,10 @@ def parse_agent_model(value: str) -> tuple[str, str]:
 
 
 def compatible_model(settings: dict, api_key=None, **options) -> BaseChatModel:
+    from .infrastructure.telemetry import ModelObserver
     provider = settings["provider"]
+    if options.get("callbacks") is None or isinstance(options.get("callbacks"), list):
+        options["callbacks"] = [*(options.get("callbacks") or []), ModelObserver(settings["model"], provider)]
     thinking = options.pop("enable_thinking", None)
     options.update(temperature=settings["temperature"], timeout=settings["timeout"],
                    # Let a fresh app start so its Settings page can accept a key.

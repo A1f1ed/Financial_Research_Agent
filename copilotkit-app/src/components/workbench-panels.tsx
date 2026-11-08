@@ -1,6 +1,7 @@
 "use client";
 
 import { AISettingsPanel } from "@/components/ai-settings";
+import { EmbeddingSettingsPanel } from "@/components/knowledge/embedding-settings";
 import { useT, type Translate } from "@/hooks/use-language";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,7 +25,7 @@ type ScheduleDraft = {
 };
 type Schedule = ScheduleDraft & { id: string; next_run: string | null };
 type Task = {
-  id: string; name: string; symbol: string; kind: "manual" | "scheduled";
+  id: string; name: string; symbol: string; kind: "manual" | "scheduled" | "document" | "knowledge" | "evaluation";
   status: string; created_at: string; error?: string; report_id?: string; managed?: boolean;
   trigger?: "manual" | "clock"; summary?: string;
 };
@@ -124,8 +125,9 @@ export async function researchRequest<T>(path: string, method = "GET", body?: un
   return data;
 }
 
-export function useResearchList<T extends object>(path: string | null, key: string, poll = true) {
+export function useResearchList<T extends object, M extends object = Record<string, never>>(path: string | null, key: string, poll = true) {
   const [items, setItems] = useState<T[]>([]);
+  const [metadata, setMetadata] = useState<M | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const refreshRef = useRef<() => Promise<void>>(async () => {});
@@ -141,9 +143,10 @@ export function useResearchList<T extends object>(path: string | null, key: stri
       clearTimeout(timer);
       const requested = revision;
       try {
-        const result = await researchRequest<Record<string, T[]>>(path, "GET", undefined, controller.signal);
+        const result = await researchRequest<Record<string, T[]> & { meta?: M }>(path, "GET", undefined, controller.signal);
         if (controller.signal.aborted || requested !== revision) return;
         setItems(result[key]);
+        setMetadata(result.meta ?? null);
         active = result[key].some(item => ("status" in item && (item.status === "queued" || item.status === "running")) ||
           ("repeat" in item && item.repeat === "trading_days" && "enabled" in item && item.enabled === true &&
             "next_run" in item && item.next_run === null) ||
@@ -176,7 +179,7 @@ export function useResearchList<T extends object>(path: string | null, key: stri
       document.removeEventListener("visibilitychange", visibility);
     };
   }, [path, key, poll]);
-  return { items, error, loading, refresh };
+  return { items, metadata, error, loading, refresh };
 }
 
 const presets = [
@@ -202,9 +205,10 @@ function describeSchedule(item: ScheduleDraft, t: Translate) {
   return `${t(MARKET[item.config.market])} · ${t(REPEAT[item.repeat])}${day ? ` ${day}` : ""} ${describeTiming(item, t)} · ${t("市场当地时间")}`;
 }
 
-function NextRun({ item }: { item: Schedule }) {
+function NextRun({ item, suspended = false }: { item: Schedule; suspended?: boolean }) {
   const t = useT();
   if (!item.enabled) return <small>{t("计划已暂停")}</small>;
+  if (suspended) return <small>{t("自动调度暂停 · 可立刻运行")}</small>;
   if (!item.next_run) return <small>{t("等待交易日历确认 · 自动重试")}</small>;
   const value = new Date(item.next_run).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai",
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -234,7 +238,7 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
   candidates: ReturnType<typeof import("./review-candidates").useReviewCandidates>;
 }) {
   const t = useT();
-  const schedules = useResearchList<Schedule>("schedules", "schedules");
+  const schedules = useResearchList<Schedule, { scheduler_enabled: boolean }>("schedules", "schedules");
   const [draft, setDraft] = useState<ScheduleDraft | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -274,7 +278,7 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
       timing: preset?.timing ?? "clock", offset_minutes: preset?.offset_minutes ?? 30,
       workflow, symbols: [], keyword: "", window_hours: preset?.repeat === "hourly" ? 1 : 24, move_threshold: 3,
       config: {
-        ...config, market,
+        ...config, market, knowledge_collection_ids: [],
         symbol: market === config.market ? config.symbol : BENCHMARK[market],
         benchmark: BENCHMARK[market], peers: market === config.market ? config.peers : [],
         question: config.question,
@@ -334,11 +338,14 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
   return <div className="workbench-page">
     <div className="workbench-title"><div><span className="section-eyebrow">SCHEDULES</span><h1>{t("定时任务")}</h1><p className="intro">{t("按市场当地时间自动运行研究，结果进入报告库和任务中心。")}</p></div>
       <button className="primary-button" onClick={() => open()}><Plus size={16} />{t("新建任务")}</button></div>
+    {schedules.metadata?.scheduler_enabled === false && <p role="status" className="finance-card">
+      {t("自动调度暂已暂停。计划设置会保留；仍可点击「立刻运行」手动试跑。")}
+    </p>}
     {(error || schedules.error) && <p role="alert" className="error-banner">{t(error || schedules.error)}</p>}
     {draft && <form ref={form} className="finance-card workbench-form" onSubmit={save}>
       <h2>{t(editing ? "编辑定时任务" : "新建定时任务")}</h2>
       <label>{t("任务名称")}<input required maxLength={30} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
-      <label>{t("业务类型")}<select value={draft.workflow} onChange={e => setDraft({ ...draft, workflow: e.target.value as Workflow, symbols: [], keyword: "" })}>
+      <label>{t("业务类型")}<select value={draft.workflow} onChange={e => setDraft({ ...draft, workflow: e.target.value as Workflow, symbols: [], keyword: "", config:{...draft.config,knowledge_collection_ids:[]} })}>
         {Object.entries(WORKFLOWS).map(([key, info]) => <option key={key} value={key}>{t(info[0])}</option>)}
       </select></label>
       <p className="field-note">{t(WORKFLOWS[draft.workflow][1])}</p>
@@ -433,7 +440,7 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
             </label></div>
           <p>{t(WORKFLOWS[item.workflow ?? "stock"][0])} · {t(describeSchedule(item, t))}</p>
           <p>{t(item.workflow === "stock" ? item.config.symbol : item.symbols?.join("、") || item.keyword || "市场主题")}</p>
-          <NextRun item={item} />
+          <NextRun item={item} suspended={schedules.metadata?.scheduler_enabled === false} />
           <div className="workbench-actions">
             <button className="primary-button" disabled={submitting !== null} onClick={() => void runNow(item)}>
               <Play size={14} />{t(submitting === item.id ? "提交中…" : "立刻运行")}
@@ -470,7 +477,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
 }) {
   const t = useT();
   const tasks = useResearchList<Task>("tasks", "tasks");
-  const schedules = useResearchList<Schedule>("schedules", "schedules");
+  const schedules = useResearchList<Schedule, { scheduler_enabled: boolean }>("schedules", "schedules");
   const [view, setView] = useState<"runs" | "plans">("runs");
   const [filter, setFilter] = useState("all");
   const [kind, setKind] = useState("all");
@@ -496,7 +503,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
       <div className="workbench-item-head task-filter-head"><h2>{t("执行记录")}</h2>
         <div className="task-filters">
         <select aria-label={t("筛选任务类型")} value={kind} disabled={deletion.busy} onChange={e => { deletion.reset(); setKind(e.target.value); }}>
-          <option value="all">{t("全部类型")}</option><option value="manual">{t("单股分析")}</option><option value="scheduled">{t("定时执行")}</option>
+          <option value="all">{t("全部类型")}</option><option value="manual">{t("单股分析")}</option><option value="scheduled">{t("定时执行")}</option><option value="document">{t("资料处理")}</option><option value="knowledge">{t("知识任务")}</option><option value="evaluation">{t("评测任务")}</option>
         </select>
         <select aria-label={t("筛选任务状态")} value={filter} disabled={deletion.busy} onChange={e => { deletion.reset(); setFilter(e.target.value); }}>
           <option value="all">{t("全部状态")}</option>{Object.entries(statusLabels).filter(([key]) => key !== "pending").map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}
@@ -506,7 +513,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
         <input type="checkbox" aria-label={t(`选择 ${task.name} · ${displayTime(task.created_at)}`)}
           disabled={deletion.busy || !canDeleteTask(task.status)}
           checked={deletion.selected.includes(`tasks/${task.id}`)} onChange={() => deletion.toggle(`tasks/${task.id}`)} />
-        <div><strong>{t(task.name)}</strong><small>{t(task.kind === "scheduled" ? "定时执行" : "单股分析")} · {t(displayTime(task.created_at))}</small>{task.error && <p className="muted">{t(task.error)}</p>}</div>
+        <div><strong>{t(task.name)}</strong><small>{t(task.kind === "evaluation" ? "评测任务" : task.kind === "knowledge" ? "知识任务" : task.kind === "document" ? "资料处理" : task.kind === "scheduled" ? "定时执行" : "单股分析")} · {t(displayTime(task.created_at))}</small>{task.error && <p className="muted">{t(task.error)}</p>}</div>
         <span className={`status-badge ${task.status}`}>{t(statusLabels[task.status] ?? task.status)}</span>
         <button className="chat-config-toggle" onClick={() => onTask(task.id)}>{t("查看任务")}</button>
         {task.report_id && <button className="chat-config-toggle" onClick={() => onReport(task.report_id!)}>{t("查看报告")}<ArrowUpRight size={14} /></button>}
@@ -523,8 +530,8 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
       {schedules.items.map(item => <article key={item.id}><div className="workbench-task-row">
         <input type="checkbox" aria-label={t(`选择 ${item.name}`)} disabled={deletion.busy}
           checked={deletion.selected.includes(`schedules/${item.id}`)} onChange={() => deletion.toggle(`schedules/${item.id}`)} />
-        <div><strong>{t(item.name)}</strong><small>{t(describeSchedule(item, t))}</small><NextRun item={item} /></div>
-        <span className="status-badge">{t(!item.enabled ? "已暂停" : item.next_run ? "等待下次执行" : "待确认")}</span>
+        <div><strong>{t(item.name)}</strong><small>{t(describeSchedule(item, t))}</small><NextRun item={item} suspended={schedules.metadata?.scheduler_enabled === false} /></div>
+        <span className="status-badge">{t(!item.enabled || schedules.metadata?.scheduler_enabled === false ? "已暂停" : item.next_run ? "等待下次执行" : "待确认")}</span>
         <button className="chat-config-toggle danger-button" disabled={deletion.busy} aria-expanded={deletion.target?.anchor === item.id}
           onClick={() => deletion.request(item.id, [{ path: `schedules/${item.id}`, name: item.name }])}>
           <Trash2 size={14} />{t("删除")}</button>
@@ -538,7 +545,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
 type Settings = { data: { cache_minutes: number }; cli_available: boolean };
 
 export function SettingsPanel({ section }: { section: "data" | "ai" }) {
-  return section === "ai" ? <AISettingsPanel /> : <DataSettingsPanel />;
+  return section === "ai" ? <><AISettingsPanel /><div className="workbench-page"><EmbeddingSettingsPanel /></div></> : <DataSettingsPanel />;
 }
 
 function DataSettingsPanel() {

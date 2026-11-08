@@ -1,0 +1,80 @@
+"use client";
+import {useEffect,useRef,useState} from "react";
+import type {Core} from "cytoscape";
+import {Focus,Minus,Plus,Search} from "lucide-react";
+import {researchRequest} from "@/components/workbench-panels";
+import {errorText,useDocumentCopy} from "@/components/documents/shared";
+import {useKnowledgeResource} from "@/components/knowledge/shared";
+import {EntitySelector} from "./dialogs";
+import {graphLabel,type Evidence,type Graph,type GraphResult} from "./shared";
+
+function fitGraph(cy:Core){
+  cy.fit(undefined,55);
+  // A tiny graph should remain readable, rather than filling the canvas with
+  // oversized nodes and labels. Explicit zoom controls are still available.
+  if(cy.zoom()>1.25)cy.zoom(1.25);
+  cy.center();
+}
+
+function GraphCanvas({result,selected,onSelect}:{result:GraphResult;selected:string;onSelect:(id:string)=>void}){
+  const c=useDocumentCopy();const host=useRef<HTMLDivElement>(null);const core=useRef<Core|null>(null);const callback=useRef(onSelect);callback.current=onSelect;
+  const [error,setError]=useState("");
+  useEffect(()=>{let cancelled=false;let resize:ResizeObserver|undefined;let observer:MutationObserver|undefined;
+    void import("cytoscape").then(({default:cytoscape})=>{
+      if(cancelled||!host.current)return;
+      // CoSE with randomize:false needs distinct initial positions; starting
+      // every new node at (0,0) leaves a symmetric small graph overlapping.
+      const radius=Math.max(160,result.nodes.length*18);
+      const cy=cytoscape({container:host.current,elements:[...result.nodes.map((n,i)=>({data:{id:n.id,label:n.name,kind:n.kind},position:{x:radius*Math.cos(2*Math.PI*i/result.nodes.length),y:radius*Math.sin(2*Math.PI*i/result.nodes.length)}})),...result.edges.map(e=>({data:{id:e.id,source:e.source_id,target:e.target_id,label:graphLabel(e.relation_type,c),assertion:e.assertion}}))],
+        layout:{name:"preset"},minZoom:.2,maxZoom:2,userZoomingEnabled:false});core.current=cy;
+      const style=()=>{if(!host.current)return;const css=getComputedStyle(host.current);const foreground=css.getPropertyValue("--foreground").trim();const accent=css.getPropertyValue("--finance-accent").trim();const border=css.getPropertyValue("--finance-muted").trim();
+        cy.style([{selector:"node",style:{"background-color":accent,"label":"data(label)","color":foreground,"font-size":12,"text-wrap":"wrap","text-max-width":"140px","text-valign":"bottom","text-margin-y":8,"width":30,"height":30}},
+          {selector:"edge",style:{"width":2,"line-color":border,"target-arrow-color":accent,"target-arrow-shape":"triangle","curve-style":"bezier","label":"data(label)","font-size":10,"color":foreground,"text-rotation":"autorotate","text-margin-y":-10}},
+          {selector:'edge[assertion="inferred"]',style:{"line-style":"dashed"}},
+          {selector:"node:selected",style:{"border-width":3,"border-color":foreground}},
+          {selector:"edge:selected",style:{"line-color":accent,"target-arrow-color":accent,"width":4}}]);};
+      style();
+      if(result.nodes.length<=12){
+        const degree=(id:string)=>result.edges.filter(e=>e.source_id===id||e.target_id===id).length;
+        const root=result.nodes.reduce((best,node)=>degree(node.id)>degree(best.id)?node:best,result.nodes[0]);
+        cy.layout({name:"breadthfirst",animate:false,directed:false,roots:root?[root.id]:undefined,nodeDimensionsIncludeLabels:true,spacingFactor:1.1,fit:false,stop:()=>fitGraph(cy)}).run();
+      }else cy.layout({name:"cose",animate:false,randomize:false,nodeDimensionsIncludeLabels:true,nodeRepulsion:()=>10000,idealEdgeLength:()=>130,gravity:.4,fit:false,stop:()=>fitGraph(cy)}).run();
+      cy.on("tap","node, edge",event=>callback.current(event.target.id()));
+      resize=new ResizeObserver(()=>cy.resize());resize.observe(host.current);observer=new MutationObserver(style);observer.observe(document.documentElement,{attributes:true,attributeFilter:["class"]});
+    }).catch(()=>{if(!cancelled)setError(c("Unable to load the interactive graph. The accessible lists remain available.","交互图加载失败，仍可使用下方实体与路径列表。"));});
+    return()=>{cancelled=true;resize?.disconnect();observer?.disconnect();core.current?.destroy();core.current=null;};
+  },[result,c]);
+  useEffect(()=>{const cy=core.current;if(!cy)return;cy.elements().unselect();if(selected){const item=cy.getElementById(selected);item.select();cy.center(item);}},[selected]);
+  return <div className="graph-canvas-panel"><div className="workbench-actions"><button type="button" className="chat-config-toggle" onClick={()=>{if(core.current)fitGraph(core.current);}}><Focus size={14}/>{c("Fit graph","适配画布")}</button><button type="button" className="chat-config-toggle" aria-label={c("Zoom in","放大")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.min(2,cy.zoom()*1.2));}}><Plus size={14}/></button><button type="button" className="chat-config-toggle" aria-label={c("Zoom out","缩小")} onClick={()=>{const cy=core.current;if(cy)cy.zoom(Math.max(.2,cy.zoom()/1.2));}}><Minus size={14}/></button><small>{c("Solid: disclosure · dashed: inference · arrows: direction","实线：披露 · 虚线：推断 · 箭头：关系方向")}</small></div><div ref={host} className="graph-canvas" role="img" aria-label={c("Interactive relationship graph. Use the node and path lists below for keyboard navigation.","交互关系图。键盘操作请使用下方实体与路径列表。")}/>{error&&<p role="alert" className="error-banner">{error}</p>}</div>;
+}
+
+export function GraphViewer({graph,onManage,onEvidence}:{graph:Graph;onManage:(objectId?:string)=>void;onEvidence:(e:Evidence)=>void}){
+  const c=useDocumentCopy();const [origin,setOrigin]=useState("");const [asOf,setAsOf]=useState(graph.scope.as_of||new Date().toLocaleDateString("en-CA"));const [validOn,setValidOn]=useState("");const [hops,setHops]=useState("1");const [inferred,setInferred]=useState(false);const [types,setTypes]=useState<string[]>([]);const [name,setName]=useState("");
+  const [filtersOpen,setFiltersOpen]=useState(true);const [result,setResult]=useState<GraphResult|null>(null);const [selected,setSelected]=useState("");const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [historyPage,setHistoryPage]=useState(1);const [revision,setRevision]=useState(0);const [historical,setHistorical]=useState(false);
+  const request=useRef<AbortController|null>(null);useEffect(()=>()=>request.current?.abort(),[]);
+  const saved=useKnowledgeResource<{queries:{id:string;name:string;created_at:string}[];total:number}>(`graphs/${graph.id}/queries?page=${historyPage}&page_size=10`,revision);
+  const change=()=>{request.current?.abort();setBusy(false);setResult(null);setSelected("");setHistorical(false);setError("");};
+  async function query(entity=origin){request.current?.abort();const controller=new AbortController();request.current=controller;setBusy(true);setError("");setResult(null);setSelected("");setHistorical(false);
+    try{const data=await researchRequest<GraphResult>(`graphs/${graph.id}/query`,"POST",{entity_id:entity,as_of:asOf,valid_on:validOn||null,max_hops:Number(hops),include_inferred:inferred,relation_types:types,name},controller.signal);
+      if(!controller.signal.aborted){setResult(data);setOrigin(entity);setSelected(entity);setRevision(v=>v+1);}}
+    catch(err){if(!controller.signal.aborted)setError(errorText(err,c));}finally{if(!controller.signal.aborted)setBusy(false);}}
+  async function openSaved(id:string){request.current?.abort();const controller=new AbortController();request.current=controller;setBusy(true);setError("");setResult(null);
+    try{const data=await researchRequest<{snapshot:GraphResult;inputs:{entity_id:string;as_of:string;valid_on:string|null;max_hops:number;include_inferred:boolean;relation_types:string[];name:string}}>(`graphs/${graph.id}/queries/${id}`,"GET",undefined,controller.signal);
+      if(!controller.signal.aborted){setResult(data.snapshot);setHistorical(true);setSelected(data.inputs.entity_id);setOrigin(data.inputs.entity_id);setAsOf(data.inputs.as_of);setValidOn(data.inputs.valid_on||"");setHops(String(data.inputs.max_hops));setInferred(data.inputs.include_inferred);setTypes(data.inputs.relation_types);setName(data.inputs.name);}}
+    catch(err){if(!controller.signal.aborted)setError(errorText(err,c));}finally{if(!controller.signal.aborted)setBusy(false);}}
+  const node=result?.nodes.find(n=>n.id===selected);const edge=result?.edges.find(e=>e.id===selected);
+  const nodeName=(id:string)=>result?.nodes.find(n=>n.id===id)?.name||id;
+  return <section className="graph-viewer"><details className="finance-card graph-query-controls" open={filtersOpen} onToggle={e=>setFiltersOpen(e.currentTarget.open)}><summary>{c("Query scope & filters","查询范围与筛选")} · {asOf}{validOn?` / ${validOn}`:""}</summary><form className="graph-query-form" onSubmit={e=>{e.preventDefault();void query();}}>
+    <h2><Search size={18}/>{c("Explore evidence paths","探索证据关系路径")}</h2><EntitySelector graphId={graph.id} value={origin} onChange={v=>{change();setOrigin(v);}} label={c("Starting identity","起始实体")}/>
+    <div className="form-grid"><label>{c("Known by","信息截止日期")}<input required type="date" value={asOf} onChange={e=>{change();setAsOf(e.target.value);}}/></label><label>{c("Applicable on (optional)","适用日期（可选）")}<input type="date" max={asOf} value={validOn} onChange={e=>{change();setValidOn(e.target.value);}}/></label><label>{c("Maximum hops","最大跳数")}<select value={hops} onChange={e=>{change();setHops(e.target.value);}}><option value="1">1</option><option value="2">2</option></select></label><label>{c("Save query name (optional)","保存查询名称（可选）")}<input maxLength={120} value={name} onChange={e=>setName(e.target.value)}/></label></div>
+    <label className="graph-check"><input type="checkbox" checked={inferred} onChange={e=>{change();setInferred(e.target.checked);}}/>{c("Include explicitly marked inference","包括明确标注的推断")}</label><details><summary>{c("Relationship filters","关系类型筛选")}</summary><div className="graph-checkboxes">{graph.relation_types.map(v=><label key={v}><input type="checkbox" checked={types.includes(v)} onChange={e=>{change();setTypes(items=>e.target.checked?[...items,v]:items.filter(t=>t!==v));}}/>{graphLabel(v,c)}</label>)}</div><small>{c("No selection includes all configured types.","不选则包含图谱允许的全部类型。")}</small></details>
+    {!graph.projection_current&&<p className="coverage-warning">{c("The graph changed. Synchronize its current revision in Graph management before a new query.","图谱已变更。请先在图谱管理同步当前版本，再发起新查询。")}<button type="button" className="chat-config-toggle" onClick={()=>onManage()}>{c("Graph management","图谱管理")}</button></p>}
+    {error&&<p className="error-banner" role="alert">{error}</p>}<button className="primary-button" disabled={busy||!origin||!graph.projection_current||graph.archived}>{busy?c("Querying…","查询中…"):c("Find paths","查询关系路径")}</button></form></details>
+    {result&&<><div className="graph-result-heading"><strong>{historical?c("Historical snapshot","历史路径快照"):c("Current query result","本次查询结果")} · v{result.graph_revision}</strong><small>{result.nodes.length} {c("nodes","个实体")} · {result.edges.length} {c("relationships","条关系")} · {result.elapsed_ms.toFixed(0)} ms</small></div>{historical&&<p className="coverage-warning">{c("Stored evidence and review state from that run. This is not a new query of current facts.","此处保留当时的证据及审核状态，不代表当前事实的新查询。")}</p>}
+      {result.truncated&&<p className="coverage-warning">{c("Result limit reached (100 nodes / 200 edges / 1,000 paths). Narrow the dates or relationship types.","已达到结果上限（100 实体 / 200 关系 / 1,000 路径），请缩小日期或关系范围。")}</p>}
+      {!result.edges.length&&<p className="empty-state">{c("No eligible reviewed relationships match these dates and filters. Missing links are not filled by inference.","当前日期和筛选下没有可用的已审核关系，不会自动补全缺失关系。")}</p>}
+      <GraphCanvas result={result} selected={selected} onSelect={setSelected}/><div className="graph-results-grid"><section className="finance-card"><h3>{c("Identities · select to locate","实体 · 选择后定位")}</h3><div className="graph-node-list">{result.nodes.map(n=><button className="chat-config-toggle" aria-pressed={selected===n.id} key={n.id} onClick={()=>setSelected(n.id)}>{n.name}<small>{graphLabel(n.kind,c)}</small></button>)}</div><h3>{c("Readable paths","可读关系路径")}</h3><ol className="graph-path-list">{result.paths.map((path,index)=><li key={index}>{path.nodes.map((id,i)=><span key={`${id}:${i}`}><button className="document-title-button" onClick={()=>setSelected(id)}>{nodeName(id)}</button>{i<path.edges.length&&<button className="chat-config-toggle" onClick={()=>setSelected(path.edges[i])}>{graphLabel(result.edges.find(e=>e.id===path.edges[i])?.relation_type||"",c)} {result.edges.find(e=>e.id===path.edges[i])?.source_id===id?"→":"←"}</button>}</span>)}</li>)}</ol></section>
+      <section className="finance-card graph-object-inspector"><h3>{node?.name||(edge?graphLabel(edge.relation_type,c):c("Select a graph object","选择图中对象"))}</h3>{node&&<><p>{graphLabel(node.kind,c)} · v{node.revision}</p><p>{node.aliases.join(" · ")}</p><button className="chat-config-toggle" disabled={busy||historical||graph.archived} onClick={()=>void query(node.id)}>{c("Explore from this identity","以此实体为起点查询")}</button><button className="chat-config-toggle" onClick={()=>onManage(node.id)}>{c("Manage identity","管理此实体")}</button></>}{edge&&<><p>{nodeName(edge.source_id)} → {nodeName(edge.target_id)}</p><p>{graphLabel(edge.assertion,c)} · {edge.valid_from} — {edge.valid_until||c("open-ended","无已知结束日期")} · v{edge.revision}</p><p>{edge.explanation}</p><button className="chat-config-toggle" onClick={()=>onManage(edge.id)}>{c("Manage relationship","管理此关系")}</button></>}{(node?.evidence||edge?.evidence||[]).map((e,i)=><div className="graph-evidence-chip" key={i}><small>{e.title} · PDF {e.page_number}</small><blockquote>{e.quote}</blockquote><button className="chat-config-toggle" onClick={()=>onEvidence(e)}>{c("Open original page","打开原文页面")}</button></div>)}</section></div></>}
+    <details className="finance-card graph-query-history"><summary>{c("Saved queries and snapshots","已保存查询及快照")}</summary>{saved.error&&<p className="error-banner" role="alert">{saved.error}</p>}{saved.data?.queries.map(v=><button className="chat-config-toggle" disabled={busy} key={v.id} onClick={()=>void openSaved(v.id)}>{v.name||c("Unnamed query","未命名查询")} · {new Date(v.created_at).toLocaleString()}</button>)}{saved.data?.total===0&&<p>{c("Queries appear here after they finish. Opening a snapshot does not run Neo4j or a model.","完成的查询会保存在这里。打开快照不会运行 Neo4j 或模型。")}</p>}<div className="workbench-actions"><button className="chat-config-toggle" disabled={historyPage===1} onClick={()=>setHistoryPage(v=>v-1)}>{c("Previous","上一页")}</button><small>{historyPage}</small><button className="chat-config-toggle" disabled={historyPage*10>=(saved.data?.total||0)} onClick={()=>setHistoryPage(v=>v+1)}>{c("Next","下一页")}</button></div></details>
+  </section>;
+}

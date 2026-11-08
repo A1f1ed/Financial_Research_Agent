@@ -21,16 +21,16 @@ from fastapi.responses import Response
 from urllib.parse import quote
 import uvicorn
 from src.agent import build_graph
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from src.research_store import DATA_DIR
+from src.persistence.checkpoints import checkpoint_saver
+from src.persistence.database import dispose_engines
 from src.learning import skills
 from src.research_store import list_reports, get_report, archive_report
 from src.research_data import cli_path
 from src.research_exports import markdown, pdf
-from src.workbench import router as workbench_router, initialize_queue, run_queue
+from src.workbench import router as workbench_router, initialize_queue
 from src.followups import router as followups_router
 from src.market_review import router as market_review_router
-from src.review_checks import router as review_checks_router, run_review_checks
+from src.review_checks import router as review_checks_router
 from src.review_candidates import initialize_candidates, router as review_candidates_router
 from src.a_share_events import router as a_share_events_router
 from src.market_sentiment import router as market_sentiment_router
@@ -44,8 +44,7 @@ from ag_ui_langgraph import add_langgraph_fastapi_endpoint
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with AsyncSqliteSaver.from_conn_string(str(DATA_DIR / "checkpoints.sqlite3")) as checkpoint:
-        await checkpoint.setup()
+    async with checkpoint_saver() as checkpoint:
         try:
             if skills is not None:
                 await skills.initialize()
@@ -54,20 +53,27 @@ async def lifespan(app: FastAPI):
                 name="finance_research", description="有日期边界和证据引用的多分析师金融研究 Agent。", graph=graph), path="/")
             initialize_queue()
             initialize_candidates()
-            queue = asyncio.create_task(run_queue())
-            checks = asyncio.create_task(run_review_checks())
             try:
                 yield
             finally:
-                queue.cancel()
-                checks.cancel()
-                await asyncio.gather(queue, checks, return_exceptions=True)
+                dispose_engines()
+                from src.infrastructure.telemetry import shutdown
+                await asyncio.to_thread(shutdown)
         finally:
             if skills is not None:
                 await skills.aclose()
 
 
 app = FastAPI(title="CopilotKit LangGraph Agent", lifespan=lifespan)
+from src.documents.api import router as documents_router, UploadBodyLimit
+from src.knowledge.api import router as knowledge_router
+from src.graphs.api import router as graphs_router
+app.add_middleware(UploadBodyLimit)
+from src.evaluations.api import router as evaluations_router
+app.include_router(evaluations_router)
+app.include_router(documents_router)
+app.include_router(knowledge_router)
+app.include_router(graphs_router)
 app.include_router(workbench_router)
 app.include_router(followups_router)
 app.include_router(market_review_router)
@@ -93,10 +99,16 @@ def save_data_settings(value: DataSettings):
 
 
 @app.get("/health")
-async def health():
+def health():
+    from src.infrastructure.telemetry import configuration
+    from sqlalchemy import text
+    from src.persistence.database import engine
+    with engine().connect() as connection:
+        connection.execute(text("SELECT 1"))
     return {
         "status": "ok",
         "learning": "ready" if skills is not None and skills.status.initialized else "disabled",
+        "langfuse": configuration()[0],
     }
 
 
@@ -104,7 +116,7 @@ async def health():
 async def research_status():
     return {"provider": "Longbridge", "cli_available": bool(cli_path()),
             "model": public_ai_settings()["model"],
-            "learning": bool(skills), "storage": "sqlite", "mode": "single-user-local",
+            "learning": bool(skills), "storage": "postgresql", "mode": "single-user-local",
             "historical_policy": "date-filtered; missing or unverifiable publication dates are excluded"}
 
 
@@ -147,6 +159,7 @@ def main():
         "main:app",
         host="127.0.0.1",
         port=port,
+        loop="src.infrastructure.loops:loop_factory",
         # Windows reload signals can terminate sibling Next.js processes.
         reload=os.getenv("AGENT_RELOAD", "false" if os.name == "nt" else "true").lower() == "true",
     )

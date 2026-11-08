@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import {EventType,type BaseEvent} from "@ag-ui/core";
+import {Observable,Subject,firstValueFrom,from,toArray} from "rxjs";
+import {coalesceAgentStream,type StreamCounts} from "../src/lib/agent-stream-events.ts";
+import {orderMessageSnapshot} from "../src/lib/message-snapshot.ts";
+import type {Message} from "@ag-ui/core";
+
+const content=(delta:string,messageId="m")=>({type:EventType.TEXT_MESSAGE_CONTENT,messageId,delta});
+const raw=(event:string)=>({type:EventType.RAW,event:{event}});
+const original:BaseEvent[]=[{type:EventType.RUN_STARTED,threadId:"t",runId:"r"},{type:EventType.TEXT_MESSAGE_START,messageId:"m",role:"assistant"}];
+for(let i=0;i<10000;i++)original.push(content(String(i%10)),raw("on_chat_model_stream"));
+original.push({type:EventType.TEXT_MESSAGE_END,messageId:"m"},raw("on_tool_start"),{type:EventType.TOOL_CALL_START,toolCallId:"tool",toolCallName:"calculate"});
+for(const delta of ['{"value":','"100",','"unit":"million"}'])original.push({type:EventType.TOOL_CALL_ARGS,toolCallId:"tool",delta},raw("on_chat_model_stream"));
+original.push({type:EventType.TOOL_CALL_END,toolCallId:"tool"},raw("on_tool_end"),raw("on_chat_model_stream"),{type:EventType.RUN_FINISHED,threadId:"t",runId:"r"});
+let counts:StreamCounts|undefined;
+const actual=await firstValueFrom(coalesceAgentStream(from(original),150,value=>counts=value).pipe(toArray()));
+function joined(events:BaseEvent[],type:string){return events.filter(event=>event.type===type).map(event=>(event as {delta:string}).delta).join("");}
+assert.equal(joined(actual,EventType.TEXT_MESSAGE_CONTENT),joined(original,EventType.TEXT_MESSAGE_CONTENT));
+assert.deepEqual(JSON.parse(joined(actual,EventType.TOOL_CALL_ARGS)),{value:"100",unit:"million"});
+assert.deepEqual(actual.filter(event=>![EventType.TEXT_MESSAGE_CONTENT,EventType.TOOL_CALL_ARGS,EventType.RAW].includes(event.type)),original.filter(event=>![EventType.TEXT_MESSAGE_CONTENT,EventType.TOOL_CALL_ARGS,EventType.RAW].includes(event.type)));
+assert.equal(actual.filter(event=>event.type===EventType.RAW).length,3,"preserve tool debug and RAW chunks without a canonical counterpart");
+assert.equal(counts?.duplicateTokenDebug,10003);assert(actual.length<30);
+
+const source=new Subject<BaseEvent>();const received:BaseEvent[]=[];
+const sub=coalesceAgentStream(source,5).subscribe(event=>received.push(event));source.next(content("first"));
+await new Promise(resolve=>setTimeout(resolve,20));assert.equal(joined(received,EventType.TEXT_MESSAGE_CONTENT),"first");
+source.next(content("second","other"));source.complete();assert.equal(joined(received,EventType.TEXT_MESSAGE_CONTENT),"firstsecond");sub.unsubscribe();
+let beforeError="";let errorSeen=false;
+coalesceAgentStream(new Observable<BaseEvent>(subscriber=>{subscriber.next(content("retained"));subscriber.error(new Error("controlled failure"));})).subscribe({next:event=>beforeError+=(event as {delta:string}).delta,error:()=>errorSeen=true});
+assert.equal(beforeError,"retained");assert(errorSeen);
+const stopped=new Subject<BaseEvent>();let late=0;const cancel=coalesceAgentStream(stopped,5).subscribe(()=>late++);stopped.next(content("pending"));cancel.unsubscribe();await new Promise(resolve=>setTimeout(resolve,20));assert.equal(late,0);
+console.log(JSON.stringify({input:original.length,output:actual.length,canonicalTextPreserved:true,toolArgumentsPreserved:true,lifecyclePreserved:true,timerAndErrorAndCancellation:true}));
+const user=(id:string)=>({id,role:"user",content:id} as Message);const answer=(id:string)=>({id,role:"assistant",content:id} as Message);
+const thought=(id:string)=>({id,role:"reasoning",content:[]} as unknown as Message);
+const current=[user("old-user"),thought("old-thought"),user("new-user"),thought("new-thought"),answer("new-answer"),answer("late-old-answer")];
+const snapshot=[user("old-user"),answer("late-old-answer"),user("new-user"),answer("new-answer")];
+assert.deepEqual(orderMessageSnapshot(current,snapshot).map(item=>item.id),["old-user","old-thought","late-old-answer","new-user","new-thought","new-answer"]);
+assert.equal(orderMessageSnapshot(current,snapshot).at(-1)?.id,"new-answer");
+assert.deepEqual(orderMessageSnapshot(snapshot,snapshot),snapshot);
+console.log("Authoritative retry order preserves reasoning and the newest answer.");

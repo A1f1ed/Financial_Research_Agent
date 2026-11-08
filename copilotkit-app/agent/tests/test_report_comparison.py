@@ -1,3 +1,4 @@
+from postgres_fixture import postgres_fixture
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -28,9 +29,7 @@ class ReportComparisonTests(TestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        database = patch.object(research_store, "DB", Path(directory.name) / "reports.sqlite3")
-        database.start()
-        self.addCleanup(database.stop)
+        self.enterContext(postgres_fixture())
 
     def compare(self, *reports, points=20):
         for value in reports:

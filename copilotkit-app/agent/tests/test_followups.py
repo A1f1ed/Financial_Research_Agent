@@ -1,3 +1,4 @@
+from postgres_fixture import postgres_fixture
 import asyncio
 import unittest
 from pathlib import Path
@@ -12,7 +13,7 @@ class FollowupTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.enterContext(patch.object(research_store, "DB", Path(directory.name) / "test.sqlite3"))
+        self.enterContext(postgres_fixture())
         self.turn = followups.Turn(thread_id="report-a", report_id="report-a", message_id="reply",
                                    question="What supports the conclusion?", answer="Evidence [S1] supports it.")
         research_store.save_report({"id": "report-a", "evidence": {"sources": [{"id": "S1"}]}})

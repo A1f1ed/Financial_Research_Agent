@@ -1,3 +1,4 @@
+from tests.postgres_fixture import postgres_fixture
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -10,24 +11,36 @@ from fastapi import HTTPException
 from src import research_store, workbench
 from src.research_models import ResearchConfig
 from src.research_workflow import read_current_research, run_financial_research
+from src.persistence.models import Job, Schedule as StoredSchedule
+from sqlalchemy import select
+import json
 
 
 class WorkbenchTests(IsolatedAsyncioTestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        db = patch.object(research_store, "DB", Path(directory.name) / "test.sqlite3")
-        db.start()
-        self.addCleanup(db.stop)
+        self.enterContext(postgres_fixture())
         workbench.initialize_queue()
         self.config = ResearchConfig(symbol="1211.HK", market="HK")
+        self.delivered = set()
+
+    def claim_jobs(self, capacity):
+        # Simulate broker delivery only; the real runner claims/fences PostgreSQL.
+        workbench.dispatch_due_schedules()
+        with research_store.connect() as db:
+            rows = db.scalars(select(Job).where(Job.status == "queued").order_by(Job.record_order)).all()
+            result = [(row.id, json.dumps(row.config)) for row in rows if row.id not in self.delivered][:capacity]
+            self.delivered.update(row[0] for row in result)
+            return result
 
     async def test_manual_jobs_run_concurrently_with_distinct_reports(self):
         ids = [workbench.create_job(self.config)["id"] for _ in range(2)]
         both_started = asyncio.Event()
         started = set()
 
-        async def fake_research(config, *, report_id):
+        async def fake_research(config, *, report_id, knowledge_snapshot=None):
+            self.assertIsNone(knowledge_snapshot)
             started.add(report_id)
             if len(started) == 2:
                 both_started.set()
@@ -38,10 +51,10 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
             })
             return {"status": "complete"}
 
-        with patch.object(workbench, "execute_research", fake_research):
-            claimed = workbench.claim_jobs(3)
+        with patch("src.research_workflow.execute_research", fake_research):
+            claimed = self.claim_jobs(3)
             self.assertEqual({row[0] for row in claimed}, set(ids))
-            self.assertEqual(workbench.claim_jobs(3), [])
+            self.assertEqual(self.claim_jobs(3), [])
             await asyncio.gather(*(workbench.run_job(*row) for row in claimed))
 
         tasks = workbench.tasks()["tasks"]
@@ -80,7 +93,7 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
             workbench.hide_task(run_id)
         self.assertEqual(error.exception.status_code, 409)
         with research_store.connect() as db:
-            db.execute("UPDATE jobs SET status='complete' WHERE id=?", (run_id,))
+            setattr(db.get(Job, run_id), "status", "complete")
         workbench.hide_task(run_id)
         workbench.remove_schedule(plan_id)
         self.assertEqual(workbench.tasks()["tasks"], [])
@@ -103,11 +116,11 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
     async def test_due_schedule_queues_once_and_advances(self):
         schedule = workbench.Schedule(name="测试计划", config=self.config, repeat="daily", time="09:00")
         key = workbench.create_schedule(schedule)["id"]
-        self.assertEqual(workbench.claim_jobs(3), [])
+        self.assertEqual(self.claim_jobs(3), [])
         with research_store.connect() as db:
-            db.execute("UPDATE schedules SET next_run=? WHERE id=?", ("2000-01-01T00:00:00+00:00", key))
-        [(job_id, raw_config)] = workbench.claim_jobs(3)
-        self.assertEqual(workbench.claim_jobs(3), [])
+            setattr(db.get(StoredSchedule, key), "next_run", datetime(2000, 1, 1, tzinfo=timezone.utc))
+        [(job_id, raw_config)] = self.claim_jobs(3)
+        self.assertEqual(self.claim_jobs(3), [])
         config = ResearchConfig.model_validate_json(raw_config)
         self.assertEqual(config.as_of, datetime.now(workbench.market_zone("HK")).date())
         task = workbench.tasks()["tasks"][0]
@@ -126,7 +139,7 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
         })):
             await workbench.sync_trading_schedules(holiday, {})
             with research_store.connect() as db:
-                self.assertEqual(db.execute("SELECT next_run FROM schedules WHERE id=?", (key,)).fetchone()[0], half_day.isoformat())
+                self.assertEqual(db.get(StoredSchedule, key).next_run.isoformat(), half_day.isoformat())
             self.assertEqual(workbench.tasks()["tasks"], [])
             await workbench.sync_trading_schedules(half_day, {})
             await workbench.sync_trading_schedules(half_day, {})
@@ -139,7 +152,7 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
         key = workbench.create_schedule(plan)["id"]
         due = datetime(2026, 11, 5, 1, 0, tzinfo=timezone.utc)
         with research_store.connect() as db:
-            db.execute("UPDATE schedules SET next_run=? WHERE id=?", (due.isoformat(), key))
+            setattr(db.get(StoredSchedule, key), "next_run", due)
         retry = {}
         with patch.object(workbench, "exchange_sessions", AsyncMock(side_effect=TimeoutError)) as calendar:
             await workbench.sync_trading_schedules(due, retry)
@@ -150,7 +163,7 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
             await workbench.sync_trading_schedules(due + timedelta(minutes=16), retry)
         self.assertEqual(workbench.tasks()["tasks"], [])
         with research_store.connect() as db:
-            self.assertEqual(db.execute("SELECT next_run FROM schedules WHERE id=?", (key,)).fetchone()[0],
+            self.assertEqual(db.get(StoredSchedule, key).next_run.isoformat(),
                              (due + timedelta(days=1)).isoformat())
 
     async def test_close_anchor_uses_half_day_and_queues_once(self):
@@ -163,13 +176,13 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
         with patch.object(workbench, "exchange_calendar", AsyncMock(return_value=calendar)):
             await workbench.sync_trading_schedules(holiday, {})
             with research_store.connect() as db:
-                self.assertEqual(db.execute("SELECT next_run FROM schedules WHERE id=?", (key,)).fetchone()[0], due.isoformat())
+                self.assertEqual(db.get(StoredSchedule, key).next_run.isoformat(), due.isoformat())
             await workbench.sync_trading_schedules(due, {})
             await workbench.sync_trading_schedules(due, {})
         [task] = workbench.schedule_history(key)["tasks"]
         self.assertEqual(task["trigger"], "clock")
         with research_store.connect() as db:
-            self.assertEqual(db.execute("SELECT next_run FROM schedules WHERE id=?", (key,)).fetchone()[0],
+            self.assertEqual(db.get(StoredSchedule, key).next_run.isoformat(),
                              "2026-11-30T21:30:00+00:00")
 
     def test_open_anchor_handles_dst_and_rejects_incompatible_repeats(self):
@@ -231,7 +244,7 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
         other_id = workbench.create_schedule(plan)["id"]
         job_id = workbench.run_schedule_now(plan_id)["id"]
         with patch("src.scheduled_briefs.cli", fake_cli):
-            await workbench.run_job(*workbench.claim_jobs(1)[0])
+            await workbench.run_job(*self.claim_jobs(1)[0])
         report = research_store.get_report(job_id)
         self.assertEqual(report["status"], "complete")
         self.assertEqual([source["title"] for source in report["evidence"]["sources"]], ["当日市场观察"])

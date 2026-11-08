@@ -1,3 +1,4 @@
+from postgres_fixture import postgres_fixture
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,7 +17,7 @@ class ReviewCheckTests(IsolatedAsyncioTestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        self.enterContext(patch.object(research_store, "DB", Path(directory.name) / "test.sqlite3"))
+        self.enterContext(postgres_fixture())
 
     def test_report_origin_uses_persisted_condition_and_latest_valid_bar(self):
         report_id = str(uuid4())

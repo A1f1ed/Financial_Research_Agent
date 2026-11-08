@@ -1,0 +1,214 @@
+{
+  "status": "starter cases; no model evaluation or numeric gold-answer scoring performed",
+  "page_numbering": "1-based PDF pages, not printed footers",
+  "cases": [
+    {
+      "id": "byd_cashflow_same_period",
+      "capability": "document_rag",
+      "question": "比亚迪2025年上半年经营现金流净额与2024年同期相比如何变化？请提供单位和合并报表页码。",
+      "evidence_routes": [
+        {
+          "document_id": "byd_2025_interim",
+          "pdf_pages": [
+            69
+          ]
+        }
+      ],
+      "checks": [
+        "Use the comparative columns for the same six-month period.",
+        "Preserve RMB thousands and distinguish net cash flow from gross receipts.",
+        "Cite PDF page 69; printed footer is 67."
+      ]
+    },
+    {
+      "id": "byd_scope_and_period",
+      "capability": "document_rag",
+      "question": "比较比亚迪2024全年与2025上半年的合并现金流，解释为什么不能直接把二者当作同比。",
+      "evidence_routes": [
+        {
+          "document_id": "byd_2024_annual",
+          "pdf_pages": [
+            131,
+            132
+          ]
+        },
+        {
+          "document_id": "byd_2025_interim",
+          "pdf_pages": [
+            69,
+            70
+          ]
+        }
+      ],
+      "checks": [
+        "Annual and half-year periods must stay distinct.",
+        "Do not silently use company-only statements.",
+        "Report comparability limits before drawing a trend conclusion."
+      ]
+    },
+    {
+      "id": "raster_chart",
+      "capability": "vision",
+      "question": "读取吉利2024业绩演示第5页的收入、汽车销售收入和平均售价图，保留单位并核对同比标注。",
+      "evidence_routes": [
+        {
+          "document_id": "geely_2024_results_presentation",
+          "pdf_pages": [
+            5
+          ]
+        }
+      ],
+      "checks": [
+        "Use the rendered source image; the PDF has no text layer.",
+        "Compare visible labels with calculated changes; flag any inconsistent chart label instead of silently correcting the source.",
+        "Keep million RMB separate from thousand RMB."
+      ]
+    },
+    {
+      "id": "cash_bridge",
+      "capability": "vision",
+      "question": "吉利2025中期业绩演示第10页如何从期初现金推导至期末现金，再推导至净现金？",
+      "evidence_routes": [
+        {
+          "document_id": "geely_2025_interim_presentation",
+          "pdf_pages": [
+            10
+          ]
+        },
+        {
+          "document_id": "geely_2025_interim",
+          "pdf_pages": [
+            11
+          ]
+        }
+      ],
+      "checks": [
+        "Keep cash and cash equivalents separate from net cash.",
+        "Preserve bridge signs and notes about capex, restricted deposits and debt.",
+        "Use report reconciliation only outside strict as-of mode until its publication date is verified."
+      ]
+    },
+    {
+      "id": "adjusted_profit",
+      "capability": "wiki",
+      "question": "如何记录吉利演示稿中的调整后利润与法定利润，避免公司知识库混用这两类指标？",
+      "evidence_routes": [
+        {
+          "document_id": "geely_2025_interim_presentation",
+          "pdf_pages": [
+            8,
+            20
+          ]
+        },
+        {
+          "document_id": "geely_2025_interim",
+          "pdf_pages": [
+            5
+          ]
+        }
+      ],
+      "checks": [
+        "Store definition, adjustment items, period, unit and source separately.",
+        "Do not replace statutory profit with an adjusted metric."
+      ]
+    },
+    {
+      "id": "policy_stage_graph",
+      "capability": "graphrag",
+      "question": "2024年欧盟中国电动车关税事件的临时与最终阶段有哪些被点名的企业？如何保留政策阶段及证据关系？",
+      "evidence_routes": [
+        {
+          "document_id": "eu_2024_ev_provisional_release",
+          "pdf_pages": [
+            1
+          ]
+        },
+        {
+          "document_id": "eu_2024_ev_definitive_release",
+          "pdf_pages": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        "Keep the July and October events/stages separate.",
+        "Do not describe historical releases as current law.",
+        "Do not equate corporate group names with listed issuers without identity evidence.",
+        "Every proposed edge needs source/page and event date."
+      ]
+    },
+    {
+      "id": "target_vs_fact",
+      "capability": "wiki",
+      "question": "如何把吉利中期演示中的未来目标写入知识库，避免后续问答当作已实现业绩？",
+      "evidence_routes": [
+        {
+          "document_id": "geely_2025_interim_presentation",
+          "pdf_pages": [
+            17
+          ]
+        }
+      ],
+      "checks": [
+        "Label forward-looking statements and preserve stated horizon.",
+        "Keep publication date, target period and actual performance separate."
+      ]
+    },
+    {
+      "id": "cutoff_leakage",
+      "capability": "as_of_retrieval",
+      "question": "截至2026年10月31日，能否引用比亚迪2026年10月产销量公告？",
+      "as_of": "2026-10-31T23:59:59+08:00",
+      "evidence_routes": [
+        {
+          "document_id": "byd_2026_10_sales",
+          "pdf_pages": [
+            1,
+            2
+          ]
+        }
+      ],
+      "checks": [
+        "Exclude the document: published November 1, despite October operating period.",
+        "Do not invent an earlier availability date."
+      ]
+    },
+    {
+      "id": "unknown_publication",
+      "capability": "as_of_retrieval",
+      "question": "截至2025年8月14日，能否用本地吉利2025中报作为已公开证据？",
+      "as_of": "2025-08-14T23:59:59+08:00",
+      "evidence_routes": [
+        {
+          "document_id": "geely_2025_interim",
+          "pdf_pages": [
+            1
+          ]
+        }
+      ],
+      "checks": [
+        "Publication date is unverified; abstain or exclude in strict as-of retrieval.",
+        "Do not substitute the report/audit date or URL month for the disclosure date."
+      ]
+    },
+    {
+      "id": "document_type_guard",
+      "capability": "document_rag",
+      "question": "本地比亚迪2026年前三季度减值公告能否替代完整三季报，回答收入、利润和完整现金流？",
+      "evidence_routes": [
+        {
+          "document_id": "byd_2026_impairment",
+          "pdf_pages": [
+            1,
+            2,
+            3
+          ]
+        }
+      ],
+      "checks": [
+        "Identify the impairment announcement accurately.",
+        "Answer only covered disclosures; state the missing complete statements."
+      ]
+    }
+  ]
+}

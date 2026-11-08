@@ -1,0 +1,25 @@
+{
+  "frozen_at": "2026-11-06T17:13:22.556492+00:00",
+  "contract_sha256": "7f136e43a3cf90f3289539771e990f558a4be7d616993a3e684d5a2a97fe6016",
+  "source_sha256": {
+    "byd_2025_interim": "d348de363b86977c65aaf3fead1c7bb30b269649ff4b18c282c20b1b87cefdaf",
+    "byd_2024_annual": "8972fd9652e6b681250a70b17b4ccbc0e9173e527e6003e3edd0dfdb7191342c",
+    "geely_2025_interim": "6f1ba810e4946fec60b90ede2d2a5df167513f2a6bac7439ee3f67f724d81cb7",
+    "geely_2024_results_presentation": "675c2cfda38dad79d8ca053076d33afe5a9d17b6c374b2a74a16644bb79b7e12",
+    "geely_2025_interim_presentation": "58a6e0d8d813b6bd1e931e8d416b3baee1e2cd9113e41e7eef35f0e717e83f03",
+    "byd_2026_impairment": "ec1c4f8fb74c590c56f75c8faafa6044307c3f79ecd6ebc1b659d06804a3a1e4",
+    "eu_2024_ev_provisional_release": "3b3c99e4aa78c45b40c578826193b09912a280c5d7f5c70c9eb196fad40c7b43",
+    "eu_2024_ev_definitive_release": "768c0bb7c2ecfe6ef3fa2692397adbea251cd5efc0b57fa0584edb2cdf518928",
+    "byd_2026_10_sales": "ba651fa8a09378786313540503abb90b254e1dcaaf3ffb50cd8bc4518d89779b"
+  },
+  "acceptance_ids": [
+    "F05",
+    "F06",
+    "V05",
+    "V06",
+    "G04",
+    "W04",
+    "B03",
+    "B04"
+  ]
+}

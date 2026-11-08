@@ -2,13 +2,15 @@
 import asyncio
 import json
 import logging
-import sqlite3
 from datetime import date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import DateTime, delete, or_, select, update
+from sqlalchemy.exc import OperationalError
+from .persistence.models import ReviewCheck
 
 from .market_review import MIN_DATE, SHANGHAI, completed_cutoff, mainland_symbol, review_row
 from .research_data import candles, exchange_sessions
@@ -43,10 +45,6 @@ class CheckRequest(BaseModel):
         return mainland_symbol(value)
 
 
-def check_store(db):
-    db.execute("CREATE TABLE IF NOT EXISTS review_checks (id TEXT PRIMARY KEY, body TEXT NOT NULL, settled INTEGER NOT NULL DEFAULT 0)")
-
-
 def confirmed_report_origin(request):
     origin = request.report_origin
     report = get_report(str(origin.report_id))
@@ -69,9 +67,8 @@ def confirmed_report_origin(request):
 @router.get("/review-checks")
 def list_checks():
     with connect() as db:
-        check_store(db)
-        rows = db.execute("SELECT body FROM review_checks ORDER BY rowid DESC").fetchall()
-    return {"checks": [json.loads(row[0]) for row in rows]}
+        rows = db.scalars(select(ReviewCheck.body).order_by(ReviewCheck.record_order.desc())).all()
+    return {"checks": rows}
 
 
 @router.post("/review-checks", status_code=201)
@@ -89,16 +86,14 @@ def create_check(request: CheckRequest):
     if request.report_origin is not None:
         entry["report_origin"] = confirmed_report_origin(request)
     with connect() as db:
-        check_store(db)
-        db.execute("INSERT INTO review_checks (id, body) VALUES (?,?)", (entry["id"], json.dumps(entry, ensure_ascii=False)))
+        db.add(ReviewCheck(id=entry["id"], body=entry))
     return entry
 
 
 @router.delete("/review-checks/{check_id}")
 def delete_check(check_id: UUID):
     with connect() as db:
-        check_store(db)
-        db.execute("DELETE FROM review_checks WHERE id=?", (str(check_id),))
+        db.execute(delete(ReviewCheck).where(ReviewCheck.id == str(check_id)))
     return {"id": str(check_id)}
 
 
@@ -109,24 +104,23 @@ async def verify_check(check_id: UUID):
 
 async def run_check(key, now, trigger):
     with connect() as db:
-        check_store(db)
-        row = db.execute("SELECT body,settled FROM review_checks WHERE id=?", (key,)).fetchone()
+        row = db.execute(select(ReviewCheck.body, ReviewCheck.settled).where(ReviewCheck.id == key)).one_or_none()
     if row is None:
         raise HTTPException(404, "找不到这条验证条件")
-    entry = json.loads(row[0])
+    entry = row[0]
     if row[1] or key in active_checks:
         return entry
     active_checks.add(key)
     try:
         await evaluate_check(entry, now, trigger)
         with connect() as db:
-            updated = db.execute("UPDATE review_checks SET body=?,settled=? WHERE id=? AND settled=0",
-                                 (json.dumps(entry, ensure_ascii=False), int(entry["result"] is not None), key))
+            updated = db.execute(update(ReviewCheck).where(ReviewCheck.id == key, ReviewCheck.settled.is_(False)).values(
+                body=entry, settled=entry["result"] is not None))
             if not updated.rowcount:
-                latest = db.execute("SELECT body FROM review_checks WHERE id=?", (key,)).fetchone()
+                latest = db.execute(select(ReviewCheck.body).where(ReviewCheck.id == key)).one_or_none()
                 if latest is None:
                     raise HTTPException(404, "这条验证条件已删除")
-                return json.loads(latest[0])
+                return latest[0]
         return entry
     finally:
         active_checks.discard(key)
@@ -203,12 +197,9 @@ async def evaluate_check(entry, now, trigger):
 
 async def run_due_checks(now):
     with connect() as db:
-        check_store(db)
-        pending = db.execute("""
-            SELECT id FROM review_checks WHERE settled=0 AND (
-                json_type(body,'$.next_attempt_at') IS NULL OR json_extract(body,'$.next_attempt_at') <= ?
-            ) ORDER BY json_extract(body,'$.next_attempt_at'), rowid LIMIT 4
-        """, (now.isoformat(),)).fetchall()
+        due = ReviewCheck.body["next_attempt_at"].astext.cast(DateTime(timezone=True))
+        pending = db.execute(select(ReviewCheck.id).where(ReviewCheck.settled.is_(False), or_(due.is_(None), due <= now))
+                             .order_by(due, ReviewCheck.record_order).limit(4)).all()
     for (key,) in pending:
         try:
             await run_check(key, now, "auto")
@@ -221,6 +212,6 @@ async def run_review_checks():
     while True:
         try:
             await run_due_checks(datetime.now(SHANGHAI))
-        except sqlite3.OperationalError:
-            logger.exception("Review check scheduler could not access SQLite; will retry")
+        except OperationalError:
+            logger.warning("Review check scheduler database unavailable; will retry")
         await asyncio.sleep(5)

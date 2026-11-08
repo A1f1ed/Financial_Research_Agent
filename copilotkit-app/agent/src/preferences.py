@@ -6,12 +6,12 @@ from threading import RLock
 from typing import Literal
 from urllib.parse import urlsplit
 
-from dotenv import set_key
+from dotenv import dotenv_values, set_key
 from pydantic import BaseModel, Field, SecretStr, field_validator
-from .research_store import connect
+from .persistence.business import BusinessRepository
 
 Provider = Literal["dashscope", "deepseek", "glm"]
-ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+ENV_FILE = Path(os.getenv("APERTURE_ENV_FILE", Path(__file__).resolve().parents[2] / ".env"))
 _lock = RLock()
 PROVIDERS = {
     "dashscope": {"label": "DashScope Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -58,14 +58,11 @@ class DataSettings(BaseModel):
 
 
 def read_setting(key, default=None):
-    with connect() as db:
-        row = db.execute("SELECT body FROM preferences WHERE key=?", (key,)).fetchone()
-    return json.loads(row[0]) if row else default
+    return BusinessRepository().read_setting(key, default)
 
 
 def write_setting(key, value):
-    with connect() as db:
-        db.execute("INSERT OR REPLACE INTO preferences VALUES (?,?)", (key, value.model_dump_json()))
+    BusinessRepository().write_settings({key: value.model_dump(mode="json")})
 
 
 def profile_settings(provider=None):
@@ -94,11 +91,16 @@ def profile_settings(provider=None):
 
 
 def provider_key(provider):
-    key = os.getenv(PROVIDERS[provider]["key_env"], "")
+    # Saved server-side overrides are shared with independent workers. Reading
+    # only os.environ would retain their pre-update credentials indefinitely.
+    saved = dotenv_values(ENV_FILE) if ENV_FILE.is_file() else {}
+    def value(name):
+        return saved.get(name) or os.getenv(name, "")
+    key = value(PROVIDERS[provider]["key_env"])
     if provider == "dashscope":
-        key = key or os.getenv("OPENAI_API_KEY", "")
+        key = key or value("OPENAI_API_KEY")
     elif provider == "glm":
-        key = key or os.getenv("GLM_API_KEY", "") or os.getenv("ZAI_API_KEY", "") or os.getenv("ZHIPUAI_API_KEY", "")
+        key = key or value("GLM_API_KEY") or value("ZAI_API_KEY") or value("ZHIPUAI_API_KEY")
     return key.strip()
 
 
@@ -116,10 +118,9 @@ def save_ai_profile(value: AISettings):
         key = value.api_key.get_secret_value().strip() if value.api_key else ""
         if key:
             # dotenv rewrites atomically and preserves unrelated environment entries.
+            ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
             set_key(str(ENV_FILE), PROVIDERS[value.provider]["key_env"], key)
+            ENV_FILE.chmod(0o600)
             os.environ[PROVIDERS[value.provider]["key_env"]] = key
-        body = json.dumps(profile)
-        with connect() as db:
-            db.executemany("INSERT OR REPLACE INTO preferences VALUES (?,?)",
-                           [(f"ai:{value.provider}", body), ("ai", body)])
+        BusinessRepository().write_settings({f"ai:{value.provider}": profile, "ai": profile})
     return public_ai_settings(value.provider)

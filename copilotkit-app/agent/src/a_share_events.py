@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 from pypdf import PdfReader
 
 from .preferences import read_setting
-from .research_store import connect
+from .persistence.business import BusinessRepository
 
 DATACENTER = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 PAGE_SIZE = 30
@@ -66,14 +66,12 @@ async def fetch_eastmoney(url, parse, *, cache_key=None):
     cache_key = cache_key or url
     async with asyncio.timeout(20):
         async with _provider_lock:
-            with connect() as db:
-                cached = db.execute("SELECT body,fetched FROM cache WHERE key=?", (cache_key,)).fetchone()
             ttl = read_setting("data", {"cache_minutes": 15})["cache_minutes"] * 60
-            if cached and time.time() - cached[1] < ttl:
-                return json.loads(cached[0])
+            cached = BusinessRepository().cached(cache_key, ttl)
+            if cached is not None:
+                return cached
             data = parse(await eastmoney_json(url))
-            with connect() as db:
-                db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (cache_key, json.dumps(data), time.time()))
+            BusinessRepository().put_cache(cache_key, data)
             return data
 
 
@@ -153,10 +151,9 @@ class NoFilingRedirect(HTTPRedirectHandler):
 
 async def filing_text(url):
     key = f"issuer-filing-text:v1:{url}"
-    with connect() as db:
-        cached = db.execute("SELECT body,fetched FROM cache WHERE key=?", (key,)).fetchone()
-    if cached and time.time() - cached[1] < 86400:
-        return json.loads(cached[0])
+    cached = BusinessRepository().cached(key, 86400)
+    if cached is not None:
+        return cached
 
     def read():
         limit = 2_000_000
@@ -173,8 +170,7 @@ async def filing_text(url):
                 body = await asyncio.to_thread(read)
     except Exception:
         return ""
-    with connect() as db:
-        db.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?)", (key, json.dumps(body), time.time()))
+    BusinessRepository().put_cache(key, body)
     return body
 
 

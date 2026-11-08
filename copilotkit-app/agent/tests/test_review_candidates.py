@@ -1,3 +1,4 @@
+from postgres_fixture import postgres_fixture
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -8,20 +9,20 @@ from fastapi import HTTPException
 
 from src import research_store
 from src.review_candidates import CandidateRequest, add_candidate, initialize_candidates, list_candidates, remove_candidate
+from src.persistence.models import CandidateObservation, ReviewCandidate
+from sqlalchemy import func, select
 
 
 class ReviewCandidateTests(TestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
-        database = patch.object(research_store, "DB", Path(directory.name) / "test.sqlite3")
-        database.start()
-        self.addCleanup(database.stop)
+        self.enterContext(postgres_fixture())
 
     def test_legacy_note_survives_and_exact_observations_are_idempotent(self):
         initialize_candidates()
         with research_store.connect() as db:
-            db.execute("INSERT INTO review_candidates VALUES (?,?,?,?)", ("000402.SZ", "2024-10-25", "510300.SH", "观察备注"))
+            db.add(ReviewCandidate(symbol="000402.SZ", session="2024-10-25", benchmark="510300.SH", note="观察备注"))
         initialize_candidates()
         initialize_candidates()
         for origin in ("ladder", "industry", "industry"):
@@ -34,7 +35,7 @@ class ReviewCandidateTests(TestCase):
         initialize_candidates()
         self.assertEqual(list_candidates()["candidates"], [])
         with research_store.connect() as db:
-            self.assertEqual(db.execute("SELECT COUNT(*) FROM candidate_observations").fetchone()[0], 0)
+            self.assertEqual(db.scalar(select(func.count()).select_from(CandidateObservation)), 0)
 
     def test_report_observation_validates_scope_and_survives_archival(self):
         initialize_candidates()

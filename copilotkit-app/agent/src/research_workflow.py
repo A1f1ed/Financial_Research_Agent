@@ -25,7 +25,9 @@ async def invoke_stage(stage_tool, arguments, config, name=None):
     # The native AG-UI bridge can then emit paired START/ARGS/END/RESULT events.
     actual = stage_tool.model_copy(update={"name": name}) if name and hasattr(stage_tool, "model_copy") else stage_tool
     tool_name = getattr(actual, "name", name or "research_stage")
-    result = await actual.ainvoke({"type": "tool_call", "id": str(uuid4()), "name": tool_name, "args": arguments}, config=config)
+    from .infrastructure.telemetry import operation
+    with operation(tool_name, kind="tool"):
+        result = await actual.ainvoke({"type": "tool_call", "id": str(uuid4()), "name": tool_name, "args": arguments}, config=config)
     return json.loads(result.content) if isinstance(result, ToolMessage) else result
 
 ROLE_GUIDANCE = {
@@ -68,6 +70,13 @@ async def retrieve_market_evidence(configuration: dict) -> dict:
 
 
 @tool
+async def retrieve_pinned_document_evidence(configuration:dict,snapshot:dict,report_id:str)->dict:
+    """Search only server-pinned document versions at the research cutoff, retaining original-page references."""
+    from .knowledge.research_scope import collect_research_documents
+    return await collect_research_documents(ResearchConfig.model_validate(configuration),snapshot,report_id)
+
+
+@tool
 async def analyst_research(role: str, configuration: dict, evidence: dict, prior_findings: dict) -> dict:
     """运行一个专业分析师或多空/风险审查员，返回结论、论据、风险、缺口和可核验引用。"""
     if role not in ROLE_GUIDANCE:
@@ -89,6 +98,7 @@ async def analyst_research(role: str, configuration: dict, evidence: dict, prior
         SystemMessage(content=f"你是金融研究团队的{ROLES.get(role, role)}。用简体中文。{ROLE_GUIDANCE[role]}\n"
             f"{DATA_INSTRUCTIONS}\n只能使用下方证据；常识可以解释概念，不能充当新的市场事实。每项事实应标注[S编号]。"
             "最多5项主要发现，每项不超过100字。不给胜率、模型置信概率或未经估值的目标价。"
+            "知识库资料为原页摘录，不代表整份财报；保留原单位和期间。没有明确提供代码计算记录时，不自行换算、合计、计算同比或比率，改为列出所需核验输入。"
             "龙虎榜同日多个上榜原因可能重叠，不能合计，也不能据此推断全市场资金方向。解禁表示可流通，不等于减持；待发生与历史事件分开。"
             "股东增减持仅为查询窗口内最多8条披露样本。只逐条或按样本描述，不宣称连续、仅有、完整覆盖或计划全部完成。区分公告日和变动区间，勿将多条披露的股数加总。"
             "只输出符合此JSON Schema的JSON对象：" + json.dumps(AnalystFinding.model_json_schema(), ensure_ascii=False)),
@@ -139,6 +149,7 @@ def read_current_research(runtime: ToolRuntime) -> dict:
     return {"id": report["id"], "symbol": report["symbol"], "as_of": report["as_of"],
             "assessment": report.get("assessment"), "findings": report.get("findings"),
             "gaps": report.get("evidence", {}).get("gaps", []),
+            "knowledge_scope": report.get("evidence", {}).get("knowledge_scope"),
             "sources": report.get("evidence", {}).get("sources", [])}
 
 
@@ -159,11 +170,16 @@ async def run_financial_research(runtime: ToolRuntime, configuration: dict | Non
             tool_call_id=runtime.tool_call_id)]})
 
 
-async def execute_research(config: ResearchConfig, *, report_id=None, tool_config=None):
+async def execute_research(config: ResearchConfig, *, report_id=None, tool_config=None, knowledge_snapshot=None):
     """Run the same evidence pipeline for chat, manual jobs and scheduled jobs."""
     serialized = config.model_dump(mode="json")
+    if config.knowledge_collection_ids and knowledge_snapshot is None:
+        from .knowledge.research_scope import pin_research_scope
+        from .persistence.database import transaction
+        with transaction() as db:knowledge_snapshot=pin_research_scope(config,db)
     started = time.monotonic()
     stages = ["data", *config.analysts]
+    if config.knowledge_collection_ids:stages.insert(1,"documents")
     if config.depth != "quick":
         stages += ["bull", "bear"]
     if config.include_risk:
@@ -173,6 +189,9 @@ async def execute_research(config: ResearchConfig, *, report_id=None, tool_confi
         "created_at": datetime.now(timezone.utc).isoformat(), "config": serialized, "status": "running",
         "stages": [{"id": s, "status": "pending"} for s in stages], "findings": {}, "assessment": None,
         "evidence": {"sources": [], "gaps": [], "bars": [], "metrics": {}}, "elapsed_seconds": 0}
+    from .infrastructure.telemetry import trace_details
+    if trace_details():
+        report["observability"] = trace_details()
     async def update(stage, status, detail=None):
         row = next(s for s in report["stages"] if s["id"] == stage)
         row.update(status=status, updated_at=datetime.now(timezone.utc).isoformat())
@@ -187,7 +206,20 @@ async def execute_research(config: ResearchConfig, *, report_id=None, tool_confi
         await update("data", "running", "获取带日期的行情、新闻和公告；排除未来及无日期记录")
         report["evidence"] = await invoke_stage(retrieve_market_evidence, {"configuration": serialized}, tool_config)
         await update("data", "complete", f"{len(report['evidence']['sources'])} 条证据；{report['evidence']['excluded_after_cutoff_or_undated']} 条未来/无日期记录已排除")
-        for role in stages[1:-1]:
+        if config.knowledge_collection_ids:
+            current="documents"
+            await update(current,"running","检索提交时固定的资料版本，核对公开日期与原页引用")
+            from .knowledge.research_scope import merge_document_evidence
+            try:
+                documents=await invoke_stage(retrieve_pinned_document_evidence,{"configuration":serialized,"snapshot":knowledge_snapshot,"report_id":report["id"]},tool_config)
+                merge_document_evidence(report["evidence"],documents)
+                await update(current,"complete" if documents["hits"] else "partial",f"{len(documents['hits'])} 条资料原页摘录；保留固定版本和检索范围")
+            except asyncio.CancelledError:raise
+            except Exception as error:
+                report["evidence"]["knowledge_scope"]=knowledge_snapshot
+                report["evidence"]["gaps"].append(f"Knowledge retrieval failed ({type(error).__name__}); this is not evidence that the originals lack an answer")
+                await update(current,"failed","资料检索失败；保留市场研究与资料范围，不编造资料结论")
+        for role in [stage for stage in stages[1:-1] if stage!="documents"]:
             current = role
             await update(role, "running", ROLE_GUIDANCE[role])
             try:
@@ -208,7 +240,7 @@ async def execute_research(config: ResearchConfig, *, report_id=None, tool_confi
         covered = sum(bool(report["findings"].get(r, {}).get("source_ids")) for r in config.analysts)
         report["evidence_coverage"] = round(covered / len(config.analysts) * 100)
         report["coverage_definition"] = "所选分析师中产生至少一条有来源发现的比例，不是预测胜率或模型准确率。"
-        report["status"] = "partial" if covered < len(config.analysts) or any(s["status"] == "failed" for s in report["stages"]) else "complete"
+        report["status"] = "partial" if covered < len(config.analysts) or any(s["status"] in {"failed","partial"} for s in report["stages"]) else "complete"
         await update(current, "complete", report["assessment"]["summary"])
     except asyncio.CancelledError:
         report["status"] = "cancelled"
