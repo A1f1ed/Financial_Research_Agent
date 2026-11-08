@@ -46,3 +46,15 @@ Fresh-source document `d80afd05-faa1-4111-b52b-43f3607da1c4` was uploaded throug
 - Final checkpoint-3 aggregate regression/desktop EN/ZH light/dark review, documentation and exact-secret/artifact preflight before declaring this checkpoint complete. Full frozen-set financial/vision/Wiki quality targets remain future work, not an acceptance badge for this feature.
 
 The user may review the feature branch now. Checkpoint 4 (final release checks, actual CI, PR, main merge and pause) still requires separate authorization.
+
+## Release follow-up, 2026-11-08
+
+After the early snapshot, the user explicitly requested README updates and a PR merge into main. This authorizes checkpoint 4; the earlier gate statements above describe the historical snapshot and are superseded by this instruction. The broader M0–M6 roadmap and independent frozen quality targets remain unfinished.
+
+- Live native CopilotChat called `read_evaluation_run` and returned real saved results, then `list_evaluation_records` and frontend `startEvaluationRun`. The human review card appeared before execution. Explicitly approving one development/no-model repetition created run `7c85d954-8326-46f5-a59b-15b3d6ad1f1a`; its Open evaluation run button opened the correct persisted result, 1/1 contract pass, zero provider calls in that evaluation. Chat itself uses the configured provider; this is not a zero-cost chat claim. Some natural-language metric wording was imprecise, so the read tool now explicitly distinguishes pinned scope pages, heterogeneous attempt timing and reservations.
+- Final mixed run `23fb77ff-2b95-416f-8c7e-f1ee6c793361` passed its 3 configured retrieval/calculation/graph cases, zero provider calls. Original PDF links opened the numeric input at PDF page 2 / metadata revision 2 and the reviewed EC graph source at PDF page 1 / revision 1. Bounded source excerpts/provenance are retained; past results are not backfilled.
+- Actual browser CSV export downloaded three result rows with IDs, status and timings, without expected answers or generated answer text.
+- New durable README screenshots show the running knowledge library, graph, evaluation center and refreshed chat. No original PDF pages are included in these added preview images.
+- Final local suites before the evidence-link adjustment: 98 integration tests / 69.675 s, 88 domain tests / 62.571 s. The adjusted evaluation suite passed 15 tests / 12.892 s; final production build, stream/lifecycle/order, Unicode evidence-selection and standalone cleanup checks passed. Actual GitHub CI repeats the final build and whole backend suites on the PR head before merge.
+
+The outstanding legacy source-mapping UI, decline-card branch, broader rapid-switch/archive/compare matrix, mobile and broad load/fault work remain coverage limits; automated tests and the exercised paths above do not silently certify them. User-requested delivery merges this documented local single-user feature scope, not a production SaaS or full financial-quality benchmark. See [GitHub delivery](github-knowledge-delivery.md) for the PR/check status and pause boundary.

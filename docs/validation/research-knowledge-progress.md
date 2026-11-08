@@ -2,6 +2,8 @@
 
 Baseline: [PRD v1.5](../PRD-research-knowledge.md), retaining the complete in-app knowledge/GraphRAG/visualization/evaluation roadmap and adding a user-approved [four-checkpoint GitHub release plan](../releases/knowledge-v0.2.md). Each checkpoint needs the user's explicit authorization before the next starts. This file records historical implementation evidence; unfinished long-term stages are not relabeled complete by the release split.
 
+**GitHub delivery follow-up:** the user has now explicitly authorized README updates and PR/main merge. Core evaluation, live Agent human-approved start and graph/calculation original-page paths are exercised; actual screenshots and CI were added. [Delivery record](github-knowledge-delivery.md) and PR #2 distinguish this runnable single-user scope from unfinished roadmap/quality work. After merge verification, pause rather than begin deferred features.
+
 ## Latest — 2026-11-08 checkpoint 2 accepted locally
 
 **Checkpoint 3 early review, 2026-11-08:** online evaluation datasets/immutable versions, dedicated background runs, real result/compare/export pages and guarded Agent wiring are implemented. Real new-upload retrieval, graph and reviewed-calculation runs passed after fixing a date-persistence defect. Latest focused suite 15 passed; full suites 96 integration / 88 domain passed before the final two added regression cases. Worker-loss/cancellation tests preserved completed results and explicitly counted unknown/cancelled attempts. The user requested an early feature-branch snapshot; [acceptance evidence and outstanding checks](checkpoint-3-evaluations.md) distinguish implemented behavior from unfinished live Agent/UI acceptance. Checkpoint 3 is not declared complete; checkpoint 4 remains gated.

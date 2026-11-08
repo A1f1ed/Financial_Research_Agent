@@ -2,7 +2,7 @@
 
 [English](README.md) | **简体中文**
 
-基于 **CopilotKit、Next.js、LangGraph 和 FastAPI** 的金融研究工作台。从配置研究团队、查看真实工具过程，到核对报告来源和继续追问，把研究串成可追溯的工作流。支持自带 Qwen、DeepSeek 或 GLM API。
+基于 **CopilotKit、Next.js、LangGraph 和 FastAPI** 的金融研究工作台。把公司研究、在线知识库、带引用 RAG、审核后的 GraphRAG 与版本化评测串成可追溯的工作流。支持自带 Qwen、DeepSeek 或 GLM API。
 
 [界面预览](#界面预览) · [功能](#功能) · [数据](#数据) · [支持的-ai](#支持的-ai) · [快速开始](#快速开始) · [架构与开发](#架构与开发)
 
@@ -10,29 +10,35 @@
 
 ## 界面预览
 
-以下是本机实际运行页面，研究样例采用公开市场资料。界面默认英文，主题按钮旁的 **EN / 中文** 可以切换语言并保存偏好；已有报告和对话保留原文。
+本机实际运行的桌面页面。界面默认英文，主题按钮旁 **EN / 中文** 可切换语言；支持清新浅色及黑灰深色主题。资料、案例名称和历史回答保留原文语言。
 
-### 自由对话与金融场景示例
+### 原生研究对话
 
-![英文聊天界面及金融工作场景示例](docs/screenshots/chat-light.jpg)
+![CopilotKit 对话与金融工作场景示例](docs/screenshots/chat-light.jpg)
 
-### 单股研究配置
+### 在线知识库
 
-![研究标的、信息截止日期、市场与深度](docs/screenshots/research-dark.jpg)
+![资料集合、抽取覆盖及在线文档管理](docs/screenshots/knowledge-light.jpg)
 
-### 报告与来源证据
+### GraphRAG 与证据路径
 
-![研究报告、执行阶段及来源引用](docs/screenshots/report-light.jpg)
+![人工审核后的关系图与真实查询路径](docs/screenshots/graph-dark.jpg)
 
-### AI 连接设置
+### 评测中心
 
-![多提供商、密钥配置状态及连接测试反馈](docs/screenshots/ai-settings-dark.jpg)
+![持久化评测运行、完成、失败与取消状态](docs/screenshots/evaluation-light.jpg)
 
-连接测试反馈：
+### 单股研究与报告
 
-![问候测试成功、模型回复和响应耗时](docs/screenshots/ai-test-feedback-dark.jpg)
+![深色研究配置](docs/screenshots/research-dark.jpg)
 
-截图用于展示界面，不代表模型准确率或投资建议。英文界面可以展示原始中文报告。
+![研究报告及来源引用](docs/screenshots/report-light.jpg)
+
+### 多模型配置
+
+![各提供商独立设置与连接测试](docs/screenshots/ai-settings-dark.jpg)
+
+研究配置、报告和 AI 设置截图包含前期工作台视图；知识库、图谱和评测截图来自本次交付。公开资料的 QA 样例用于展示功能，不代表独立金融准确率或投资建议。仓库不打包原始 PDF 语料或用户数据库。
 
 ## 功能
 
@@ -46,6 +52,11 @@
 | A 股收盘复盘   | 选定样本相对基准表现、量比、涨跌停与炸板池、连板梯队、昨涨停次日表现及近期行业分布。                                                       |
 | 候选与条件核对 | 保存观察、备注和候选标的，复用到复盘或定时计划；保存下一交易日可量化条件。服务运行且数据可用时，在目标日收盘后核对。                       |
 | 定时研究       | 市场晨报、主题要闻、自选异动、公告追踪、周复盘和单股研究。预设只填写草稿，用户创建后才生效；支持启停、立刻运行、独立历史、单删和批量删除。 |
+| 在线知识库 | 网页上传 PDF/图片或导入支持的官方链接；管理集合、精确文档版本、公开日期依据、处理覆盖、索引及归档/恢复，无需预先在服务器放资料。 |
+| 带引用 RAG | 按文档及截止日期进行关键词或 pgvector 混合检索；原生文档问答、PDF 原页定位、单股任务绑定。未知日期和不可读页明确呈现。 |
+| 财务数字核验 | 人工确认原值、单位、期间和口径，再用 Decimal 复算，保存输入修订、公式、换算及审计历史。 |
+| GraphRAG | 从选定资料抽取候选，核实实体身份，人工接受/拒绝/撤销后发布至 Neo4j，交互查询关系及路径并打开原页，保留历史快照。 |
+| 评测中心 | 网页新建/导入/编辑评测集、发布不可变版本，后台运行检索、Agent、图谱、计算及列表基准；查看逐题结果、阶段耗时、失败、预算、取消/重试和运行对照。 |
 | 模型与外观     | Qwen、DeepSeek、GLM 分别保存配置；测试问候不保存，保存后启用。中英文、黑灰深色与清新浅色主题、手机布局。                                   |
 
 ### 保留原生 CopilotKit
@@ -54,15 +65,25 @@
 
 Inspector、原生线程历史与学习接入依赖你配置的 **CopilotKit Intelligence**。Automatic Learning 在这里是技能提炼及审核发布流程，不是自动训练模型。上游原生能力演示保留在 `/playground`。
 
+### 从资料到可核验证据
+
+1. **知识库**：新建集合，上传原文或导入支持的官方链接；核实公开日期，检查可读文本及仍需视觉的页数。
+2. **RAG**：构建关键词或已配置的混合索引，选择截止日期检索证据，并打开绑定精确版本的原生文档聊天。
+3. **GraphRAG**：在“图谱管理”抽取提议，核实身份与证据后人工审核发布；到“关系图与路径”查询审核后的关联。
+4. **评测中心**：添加自己的题目、预期页/数值，发布版本后明确配置预算并开始运行。资料、规则或配置变化后对照历史结果；聊天能读取真实统计，也能通过人工确认卡请求新运行。
+
+使用说明：[资料库/RAG](docs/document-library.md) · [图谱研究](docs/graph-research.md) · [评测中心](docs/evaluations.md)。
+
 ## 数据
 
-可选的 **Langfuse** 通过 OpenTelemetry 接收研究/工具/模型的元数据追踪。服务端 `.env` 配置 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、项目区域对应的 `LANGFUSE_BASE_URL` 后重建服务。不导出问题、回答、原文和推理；可用时记录模型 token 用量。`APERTURE_TRACING_ENABLED=false` 可关闭。该集成补充原生 Inspector，产品内质量/性能评测中心仍在开发。
+可选的 **Langfuse** 通过 OpenTelemetry 接收研究/工具/模型的元数据追踪。服务端 `.env` 配置 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY`、项目区域对应的 `LANGFUSE_BASE_URL` 后重建服务。不导出问题、回答、原文和推理；可用时记录模型 token 用量。`APERTURE_TRACING_ENABLED=false` 可关闭。该集成补充原生 Inspector，产品内[评测中心](docs/evaluations.md)已提供版本化数据集及真实后台运行，范围与实测见[评测验收记录](docs/validation/checkpoint-3-evaluations.md)。
 
 | 数据源                                        | 当前用途                                                     | 覆盖与限制                                                                     |
 | --------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | [Longbridge CLI](https://open.longbridge.com/) | 主要行情、日线、财务数据、新闻、公司公告、社区样本和交易日历 | 配置支持港股、美股、沪深及新加坡研究；具体可用性取决于账号权限和接口历史窗口。 |
 | 腾讯财经                                      | 沪深未复权日线备用源                                         | 支持的 Longbridge 历史数据不足时使用，保留来源标识。                           |
 | 东方财富公开数据                              | A 股事件、龙虎榜、限售解禁、股东增减持和收盘行情池           | 核对记录日期，在可验证时附发行人公告。行情池统计沿用来源口径。                 |
+| 用户资料 | 自行上传 PDF/图片及支持的官方来源导入 | 原文保存到 S3 兼容存储，保留精确版本、公开日期依据和文本/索引覆盖。示例原件不打包、不自动预载。 |
 | 本地计算                                      | 均线、RSI/MACD、波动率、相对表现、条件核对与双报告价格对齐   | 由代码基于保留数据计算。未复权价格可能受公司行动影响，价格变化不等于总回报。   |
 
 ### 研究边界
@@ -196,7 +217,7 @@ flowchart LR
 
 ### 验证
 
-开发遵循 [Git/PR 规范](CONTRIBUTING.md)。本次 GitHub 交付按[四个逐点确认的检查点](docs/releases/knowledge-v0.2.md)执行：保存现有成果、完成 RAG/GraphRAG 验收、实现 App 内评测中心、最终验证并经 PR 合并；每点结束后等待用户确认。视觉、公司 Wiki/论点及增量知识跟踪留到下一版。当前分支为开发快照，不是已验收发行版。
+开发遵循 [Git/PR 规范](CONTRIBUTING.md)。本次知识/评测交付的本地验证与 PR/CI 记录见[交付说明](docs/validation/github-knowledge-delivery.md)。使用功能分支及 PR 合并，视觉、公司 Wiki/论点和增量知识跟踪留到下一版。
 
 ```powershell
 cd copilotkit-app
@@ -208,7 +229,7 @@ uv run python -m unittest discover -s tests -v
 
 Python 测试需要运行真实 PostgreSQL/Redis，使用独立测试库和缓存前缀，覆盖研究边界、任务、计划、报告对照、复盘、追问与提供商配置。提供商失败测试使用受控错误；真实连接测试会消耗少量模型请求。
 
-研究知识功能已有在线集合/资料管理、限定范围关键词/混合检索、原生文档问答、人工核实数字与可复算的 Decimal 计算，以及单股任务的精确文档版本绑定。GraphRAG 支持自动提议、人工身份/关系审核、发布、可视化路径和文档聊天中的只读图谱工具。[检查点 2 验收记录](docs/validation/checkpoint-2-rag-graph.md)列出真实公开资料的网页闭环、生产模式 UI 验证及未覆盖项。参阅[资料库](docs/document-library.md)、[图谱研究](docs/graph-research.md)和[完整路线图验收矩阵](docs/validation/research-knowledge-validation.md)。App 内评测、视觉核验、Wiki/论点、高级生命周期/治理及完整生产验收仍待完成。目前为功能分支检查点，尚未最终发布或经 PR 合并。
+研究知识功能已有在线集合/资料管理、限定范围关键词/混合检索、原生文档问答、人工核实数字与可复算的 Decimal 计算，以及单股任务的精确文档版本绑定。GraphRAG 支持自动提议、人工身份/关系审核、发布、可视化路径和文档聊天中的只读图谱工具。[检查点 2 验收记录](docs/validation/checkpoint-2-rag-graph.md)列出真实公开资料的网页闭环、生产模式 UI 验证及未覆盖项。参阅[资料库](docs/document-library.md)、[图谱研究](docs/graph-research.md)和[完整路线图验收矩阵](docs/validation/research-knowledge-validation.md)。App 内评测已提供真实后台运行及网页结果，详见[评测验收记录](docs/validation/checkpoint-3-evaluations.md)。视觉核验、Wiki/论点、高级生命周期/治理及完整生产验收仍在后续范围；不宣称独立冻结集准确率目标或广泛负载测试已达标。
 
 实际验收路径和未覆盖项见 [验收记录](copilotkit-app/VALIDATION.md)，剩余缺口见 [研究路线图](copilotkit-app/RESEARCH-ROADMAP.md)。本机构建成功不代表已经达到商业化生产服务要求。
 
@@ -216,8 +237,16 @@ Python 测试需要运行真实 PostgreSQL/Redis，使用独立测试库和缓�
 
 许可见 [LICENSE](copilotkit-app/LICENSE)。行情及模型服务遵循各自授权条款。输出仅供研究与学习，不构成个性化投资建议。
 
-## 评测中心 · 分支提前验收
 
-侧栏“评测中心”提供网页新建/导入评测集、不可变版本、后台真实运行、逐题结果与原页、质量/阶段耗时、取消/重试、预算及运行对比。检索、原生文档 Agent、图谱、已核实数字计算和列表性能分别测量；不支持的视觉/Wiki 案例明确计数，不编造通过结果。
+## 本次技术栈与边界
 
-这是第 3 检查点的提前验收快照，尚未宣告最终验收完成或合并 main。[使用说明](docs/evaluations.md)和[实测及待验收清单](docs/validation/checkpoint-3-evaluations.md)列出真实运行、恢复测试和剩余 Agent/UI 检查。
+| 层次 | 技术与职责 |
+| --- | --- |
+| 前端 | Next.js 16、React 19、TypeScript、CopilotKit 1.79；Recharts 图表、Cytoscape 图谱 |
+| Agent/API | Python 3.12+、FastAPI、LangGraph、LangChain、OpenAI 兼容模型适配 |
+| 持久化 | PostgreSQL 17、pgvector、SQLAlchemy/psycopg、Alembic、PostgreSQL checkpoints |
+| 后台任务 | Celery、RabbitMQ、事务 outbox、租约隔离；Redis TTL 缓存 |
+| 原文与图谱 | S3 API（本机 SeaweedFS）、PDF 抽取/渲染、Neo4j 已审核投影 |
+| 追踪与验证 | 原生 Inspector、可选仅元数据 Langfuse/OpenTelemetry；GitHub Actions 构建、业务及真实服务测试 |
+
+当前是单用户本机研究软件。公网认证、租户隔离、计费与托管不在本次范围。图谱提议需要审核；确定性评测规则不代表答案语义准确率或投资收益。不可读页视觉理解、LLM Wiki/论点、增量知识跟踪和模型语义裁判待后续开发。桌面中英文/深浅主题已走查，手机验收及广泛负载测试暂缓，详情见[交付记录](docs/validation/github-knowledge-delivery.md)。

@@ -203,6 +203,8 @@ class EvaluationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "complete", str(result))
         self.assertEqual(result["summary"]["counts"]["passed"], 1, str(result["attempts"]))
         self.assertEqual(result["attempts"][0]["calculation"]["period_end"], "2026-06-30")
+        self.assertEqual(result["attempts"][0]["citations"][0]["document_id"], self.document)
+        self.assertTrue(result["attempts"][0]["citations"][0]["quote"])
 
     async def test_page_budget_and_concurrent_runs(self):
         doc=self.material("Synthetic source");await self.build(doc)

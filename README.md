@@ -4,7 +4,7 @@
 
 An evidence-first financial research workspace built with **CopilotKit, Next.js, LangGraph and FastAPI**.
 
-Configure a research team, follow its tool activity, inspect the sources behind a report, and keep asking questions in the report's own context. Bring your own Qwen, DeepSeek or GLM API connection.
+Research companies, manage your source documents, explore reviewed relationships and measure the results. Aperture connects native streaming chat with an online knowledge base, cited RAG, GraphRAG and a versioned evaluation center. Bring your own Qwen, DeepSeek or GLM API connection.
 
 [Interface previews](#interface-previews) · [Features](#features) · [Data](#data) · [Supported AI](#supported-ai) · [Quick start](#quick-start) · [Architecture](#architecture) · [Development](#development)
 
@@ -12,29 +12,35 @@ Configure a research team, follow its tool activity, inspect the sources behind 
 
 ## Interface previews
 
-Actual screenshots of the local application, with public-market research used as examples. The interface defaults to English; **EN / 中文** beside the theme button switches languages and remembers the choice. Saved reports and conversations keep their original language.
+Actual desktop captures from the running application. The interface defaults to English; **EN / 中文** beside the theme button switches languages. Both light and charcoal dark themes are available. Case names, source material and saved model outputs retain their original language.
 
-### Research chat
+### Native research chat
 
-![English research chat and finance workflow examples](docs/screenshots/chat-light.jpg)
+![CopilotKit chat and concrete finance workflow examples](docs/screenshots/chat-light.jpg)
 
-### Research configuration
+### Online knowledge management
 
-![Research target, information cutoff, market and depth](docs/screenshots/research-dark.jpg)
+![Collections, source coverage and online document management](docs/screenshots/knowledge-light.jpg)
 
-### Report and evidence
+### Reviewed GraphRAG and evidence paths
 
-![Research report with native progress stages and source citations](docs/screenshots/report-light.jpg)
+![Reviewed relationships, interactive graph and saved paths](docs/screenshots/graph-dark.jpg)
 
-### Connect your AI
+### Evaluation center
 
-![Provider selection, masked credentials, and connection test feedback](docs/screenshots/ai-settings-dark.jpg)
+![Versioned evaluation runs with actual completion, cancellation and failure states](docs/screenshots/evaluation-light.jpg)
 
-Connection-test feedback:
+### Single-stock research and reports
 
-![Successful greeting test with response and elapsed time](docs/screenshots/ai-test-feedback-dark.jpg)
+![Research configuration in charcoal dark theme](docs/screenshots/research-dark.jpg)
 
-These screenshots illustrate the interface, not a model accuracy claim or an investment recommendation. Existing research may be in Chinese even when the interface is English.
+![Research report and retained evidence](docs/screenshots/report-light.jpg)
+
+### Multi-provider AI settings
+
+![Separate AI provider settings and connection controls](docs/screenshots/ai-settings-dark.jpg)
+
+The research/configuration/report/settings images include earlier workbench views; the knowledge, graph and evaluation captures document this delivery. Public-source QA records illustrate workflows, not independent financial accuracy or investment recommendations. No original PDF corpus or user database is bundled.
 
 ## Features
 
@@ -48,6 +54,11 @@ These screenshots illustrate the interface, not a model accuracy claim or an inv
 | A-share closing review | Review a selected sample against a benchmark, volume ratios, limit-up/down and failed-breakout pools, streaks, next-day follow-through and recent industry distributions.                                                                                             |
 | Candidates and checks  | Keep observations and notes, reuse candidates in reviews and schedules, and save measurable next-trading-day conditions. While the service runs, pending checks are evaluated after the target close when data is available.                                          |
 | Scheduled research     | Draft market morning briefs, topic news roundups, watchlist move scans, filing trackers, weekly reviews or stock research. Presets fill forms; you create the schedule. Enable/disable, run now, inspect per-plan history, or delete records individually/in batches. |
+| Online knowledge base | Upload PDF/images or import supported official links; manage collections, exact document versions, publication-date evidence, extraction coverage, index builds and archive/restore. No server-preloaded folder is required. |
+| Cited document RAG | Keyword or pgvector hybrid retrieval under explicit document/date scope; native document Q&A, original PDF-page citations and exact-document binding for stock research. Missing dates and unreadable pages stay visible. |
+| Reviewed financial arithmetic | Confirm original value, unit, period and basis, then compute with Decimal. Retain reviewed input revisions, formulas, conversions and calculation history. |
+| GraphRAG | Extract relationship proposals from selected originals, verify entity identities, accept/reject/revoke with human review, publish to Neo4j, explore interactive paths and open supporting original pages. Historical snapshots preserve evidence. |
+| Evaluation center | Create/import/edit datasets, publish immutable versions and run real queued retrieval, Agent, graph, calculation or list benchmarks. Inspect checks, failures, raw latency samples, budgets, cancellation, parent-linked retries and run comparisons. |
 | AI and appearance      | Configure separate Qwen, DeepSeek and GLM profiles, test a greeting without saving, then save and activate. Switch English/Chinese and charcoal dark/fresh light themes. Responsive layouts support narrow screens.                                                   |
 
 ### Native CopilotKit, preserved
@@ -56,7 +67,16 @@ The workbench retains **CopilotChat, native tool cards, AG-UI streaming, Generat
 
 Inspector, native thread history and the Intelligence learning integration use your configured **CopilotKit Intelligence** connection. Automatic Learning here means skill extraction and review/publishing, not automatic model training. Upstream integration demonstrations remain at `/playground`.
 
-Optional **Langfuse** exports metadata-only research/tool/model traces through OpenTelemetry. Configure `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and your regional `LANGFUSE_BASE_URL` in the server `.env`, then recreate services. Prompts, outputs, documents and reasoning are excluded; model token usage is recorded when available. Set `APERTURE_TRACING_ENABLED=false` to disable. This supplements Inspector; the [in-app evaluation center](docs/evaluations.md) now provides versioned datasets and actual background runs, with [final acceptance still in progress](docs/validation/checkpoint-3-evaluations.md).
+Optional **Langfuse** exports metadata-only research/tool/model traces through OpenTelemetry. Configure `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and your regional `LANGFUSE_BASE_URL` in the server `.env`, then recreate services. Prompts, outputs, documents and reasoning are excluded; model token usage is recorded when available. Set `APERTURE_TRACING_ENABLED=false` to disable. This supplements Inspector; the [in-app evaluation center](docs/evaluations.md) now provides versioned datasets and actual background runs, with [measured acceptance evidence](docs/validation/checkpoint-3-evaluations.md).
+
+### Knowledge-to-evidence workflow
+
+1. **Knowledge base:** create a collection; upload an original or import a supported official link. Record a verified public release date and inspect text/visual coverage.
+2. **RAG:** build a keyword or configured hybrid index; choose a historical cutoff, search evidence and open a native chat bound to exact document versions.
+3. **GraphRAG:** use **Graph management** to extract proposals. Resolve identities and review evidence before publishing. Open **Relationships & paths** to query the reviewed graph.
+4. **Evaluation center:** add your own cases and expected pages/values, publish a version, choose budgets and explicitly start a run. Compare saved runs after source, rule or configuration changes. Chat can read actual results and request a run through a human approval card.
+
+Read the guides: [Document library and RAG](docs/document-library.md) · [Graph research](docs/graph-research.md) · [Evaluation center](docs/evaluations.md).
 
 ## Data
 
@@ -65,6 +85,7 @@ Optional **Langfuse** exports metadata-only research/tool/model traces through O
 | [Longbridge CLI](https://open.longbridge.com/) | Primary prices, daily bars, financial data, news, company announcements, community samples and exchange calendars | Supports configured HK, US, Shanghai, Shenzhen and Singapore research. Availability depends on your account, permissions and the endpoint's history window. |
 | Tencent Finance                               | Fallback unadjusted mainland daily bars                                                                           | Used when supported Longbridge historical data is unavailable; the source is recorded.                                                                      |
 | Eastmoney public data                         | A-share events, trading disclosures, share unlocks, shareholder dealings and closing market pools                 | Records are checked against dates; issuer announcement links are retained where verified. Pool counts use the source's definitions.                         |
+| Your documents | User-uploaded PDFs/images and supported official-source imports | Originals in S3-compatible storage; exact versions, publication evidence and derived text/index coverage retained. Cached public examples are not bundled or auto-loaded. |
 | Local calculations                            | Moving averages, RSI/MACD, volatility, relative performance, condition checks and report price alignment          | Computed by code from retained data. Unadjusted prices can jump around corporate actions; price changes are not total investment returns.                   |
 
 ### Research boundaries
@@ -169,21 +190,33 @@ Submitted research runs in independent Celery workers and survives API restart. 
 
 ```mermaid
 flowchart LR
-    UI[Next.js workspace + native CopilotChat] <--> Runtime[CopilotKit Runtime]
-    Runtime <-->|AG-UI streams and shared state| Agent[FastAPI + LangGraph]
+    UI[Next.js workspace / CopilotChat] <--> Runtime[CopilotKit Runtime]
+    Runtime <-->|AG-UI / tools / shared state| Agent[FastAPI / LangGraph]
     Runtime <--> Intelligence[Optional CopilotKit Intelligence]
-    UI <-->|Allowlisted research and settings API| Agent
-    Agent --> Research[Evidence → analysts → bull/bear and risk review → report]
-    Research --> Models[Qwen / DeepSeek / GLM]
-    Research --> Sources[Read-only market data + Python calculations]
-    Agent <--> PostgreSQL[PostgreSQL: reports, plans and checkpoints]
+    UI <-->|Allowlisted APIs| Agent
+    Agent --> Models[Qwen / DeepSeek / GLM]
+    Agent --> Sources[Read-only market data]
+    Agent <--> PG[PostgreSQL + pgvector]
     Agent --> Outbox[Transactional outbox]
-    Outbox --> RabbitMQ
-    RabbitMQ --> Workers[Independent Celery workers]
-    Workers --> PostgreSQL
-    Workers --> Research
-    Workers <--> Redis[Disposable market cache]
+    Outbox --> MQ[RabbitMQ]
+    MQ --> Workers[Research / documents / knowledge / evaluation workers]
+    Workers <--> PG
+    Workers <--> S3[S3-compatible originals and artifacts]
+    Workers <--> Neo4j[Reviewed graph projection]
+    Workers <--> Redis[Disposable cache]
+    Workers --> Models
+    Workers -. metadata only .-> Langfuse[Optional Langfuse]
 ```
+
+| Layer | Technology and role |
+| --- | --- |
+| Frontend | Next.js 16, React 19, TypeScript, CopilotKit 1.79; Recharts and Cytoscape for charts/graphs |
+| Agent/API | Python 3.12+, FastAPI, LangGraph, LangChain, OpenAI-compatible provider adapters |
+| Durable state | PostgreSQL 17; pgvector; SQLAlchemy/psycopg; Alembic; PostgreSQL LangGraph checkpoints |
+| Jobs and cache | Celery, RabbitMQ, transactional outbox and fenced leases; Redis TTL cache |
+| Evidence and graph | S3 API (local SeaweedFS), PDF extraction/rendering, Neo4j reviewed projections |
+| Observability and verification | Native CopilotKit Inspector, optional metadata-only Langfuse/OpenTelemetry; GitHub Actions build, domain and real-service tests |
+
 
 The model interprets evidence. Code computes technical indicators, schedules, condition outcomes and common-session comparisons.
 
@@ -198,7 +231,7 @@ The model interprets evidence. Code computes technical indicators, schedules, co
 
 ## Development
 
-Follow the [Git and PR workflow](CONTRIBUTING.md). The next GitHub delivery is split into [four user-confirmed checkpoints](docs/releases/knowledge-v0.2.md): preserve the current implementation, finish RAG/GraphRAG acceptance, implement in-app evaluation, then validate and merge through a PR. Vision, company Wiki/theses and incremental knowledge tracking follow in a later release. This branch is a development checkpoint, not a completed release.
+Follow the [Git and PR workflow](CONTRIBUTING.md). The [delivery record](docs/validation/github-knowledge-delivery.md) records local verification and the PR/CI for the knowledge/evaluation delivery. Changes go through feature branches and pull requests. Vision, company Wiki/theses and incremental knowledge tracking follow in a later release.
 
 ```powershell
 cd copilotkit-app
@@ -210,7 +243,7 @@ uv run python -m unittest discover -s tests -v
 
 The Python suite uses isolated real PostgreSQL databases and namespaced Redis cache, so infrastructure must be running. It covers research boundaries, tasks, schedules, report comparison, market review, follow-ups and provider configuration. Provider failure tests use controlled failures; real connection checks consume a small model request.
 
-Research knowledge includes online collections/documents, scoped keyword/hybrid retrieval, native document Q&A, reviewed numeric inputs with reproducible Decimal calculations, and exact-document binding for single-stock tasks. GraphRAG supports automatic proposals, explicit human identity/relationship review, publication, interactive paths and read-only graph tools inside document chat. The [checkpoint 2 acceptance record](docs/validation/checkpoint-2-rag-graph.md) documents real public-source browser workflows, production UI checks and remaining limits. See [Document library](docs/document-library.md), [Graph research](docs/graph-research.md) and the [broader validation matrix](docs/validation/research-knowledge-validation.md). The [evaluation center](docs/evaluations.md) supports online dataset/version management, real queued retrieval/Agent/graph/calculation/list evaluation, failure inspection, budgets, cancellation, retries and comparisons. Its [checkpoint 3 early-review record](docs/validation/checkpoint-3-evaluations.md) lists actual results and unfinished live Agent/UI checks. Visual verification, Wiki/theses, advanced lifecycle/governance and full production acceptance remain unfinished. This is a feature-branch checkpoint; final release/PR merge has not occurred.
+Research knowledge includes online collections/documents, scoped keyword/hybrid retrieval, native document Q&A, reviewed numeric inputs with reproducible Decimal calculations, and exact-document binding for single-stock tasks. GraphRAG supports automatic proposals, explicit human identity/relationship review, publication, interactive paths and read-only graph tools inside document chat. The [checkpoint 2 acceptance record](docs/validation/checkpoint-2-rag-graph.md) documents real public-source browser workflows, production UI checks and remaining limits. See [Document library](docs/document-library.md), [Graph research](docs/graph-research.md) and the [broader validation matrix](docs/validation/research-knowledge-validation.md). The [evaluation center](docs/evaluations.md) supports online dataset/version management, real queued retrieval/Agent/graph/calculation/list evaluation, failure inspection, budgets, cancellation, retries and comparisons. Its [evaluation acceptance record](docs/validation/checkpoint-3-evaluations.md) distinguishes actual runs, remaining coverage and deterministic scoring limits. Visual verification, Wiki/theses, advanced lifecycle/governance and full production acceptance remain unfinished. The independent frozen quality targets and broad load/fault matrix are not claimed as passing.
 
 See [validation notes](copilotkit-app/VALIDATION.md) for actual test paths and unverified areas, and the [research roadmap](copilotkit-app/RESEARCH-ROADMAP.md) for remaining gaps. Full commercial production readiness is not implied by a successful local build.
 
@@ -222,6 +255,7 @@ copilotkit-app/
   agent/main.py     FastAPI entry point and LangGraph lifecycle
   agent/src/        Model adapters, data, workflows, persistence and scheduling
   agent/tests/      Business logic and boundary tests
+  agent/integration_tests/  Real-service and recovery checks
   scripts/          Build/start helpers and integration checks
 docs/screenshots/   Actual interface previews
 ```
@@ -229,3 +263,11 @@ docs/screenshots/   Actual interface previews
 ## Acknowledgments and license
 
 See [LICENSE](copilotkit-app/LICENSE). Market-data and model access remain subject to their providers' terms. Research output is for information and learning, not personalized investment advice.
+
+## Current limits and next steps
+
+- This release supports local single-user research. Public authentication/tenant isolation, billing and managed production hosting remain future work.
+- Graph extraction creates reviewable proposals; an LLM proposal is never automatically a verified business relationship.
+- Evaluation scores cover configured deterministic checks. They do not establish semantic answer accuracy, investment performance or generalization. Repeated performance samples are not independent quality cases; unknown usage/outcomes remain explicit.
+- Vision/OCR reasoning for unreadable pages, LLM Wiki/thesis lifecycle, incremental knowledge tracking and automated semantic judges are planned. Unsupported evaluation targets remain visible rather than receiving fabricated passes.
+- Desktop EN/ZH light/dark paths were checked; mobile acceptance and broader concurrency/load testing are deferred. See [release evidence and limits](docs/validation/github-knowledge-delivery.md).

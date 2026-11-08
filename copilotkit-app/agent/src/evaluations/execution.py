@@ -78,7 +78,7 @@ def citation_checks(case, hits):
     allowed = {d["id"] for d in case["snapshot"]["documents"] if d["eligible"]}
     with transaction() as db:
         invalid = sum(not evidence_current(db, [hit], allowed) for hit in hits)
-    return {"citations": [{k: h[k] for k in ("document_id", "page_number", "document_version", "metadata_revision", "document_sha256", "citation_id") if k in h} for h in hits],
+    return {"citations": [{k: h[k] for k in ("document_id", "page_number", "document_version", "metadata_revision", "document_sha256", "citation_id", "search_id", "published_on", "published_at") if k in h} | {"quote": h.get("quote", "")[:1500]} for h in hits],
         "invalid_citations": invalid, "date_leaks": sum(h["document_id"] not in allowed for h in hits)}
 
 
@@ -120,7 +120,7 @@ async def execute_case(case, run, attempt_id, token):
         result = FigureRepository().calculate(case["collection_id"], CalculationInput.model_validate(case["calculation"]),
             eligible={d["id"] for d in case["snapshot"]["documents"] if d["eligible"]})
         period = {k: result["inputs"][0][k] for k in ("period_start", "period_end")}
-        return {"calculation_id": result["id"], "calculation": {**{k: v for k, v in result.items() if k not in {"inputs", "references", "request"}}, **period}}
+        return {**citation_checks(case, result["references"]), "calculation_id": result["id"], "calculation": {**{k: v for k, v in result.items() if k not in {"inputs", "references", "request"}}, **period}}
     return await execute_agent(case, run, attempt_id, token, options)
 
 

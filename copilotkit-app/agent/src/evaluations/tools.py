@@ -19,6 +19,7 @@ async def read_evaluation_run(run_id:str):
     """Read actual progress, aggregate metrics and attempt IDs, without generated or frozen answers. No scores are invented; incomplete results are labeled."""
     UUID(run_id);data=EvaluationRepository().detail(run_id)
     data["attempts"]=[{k:a[k] for k in ("id","case_id","repetition","status","elapsed_ms","error_type") if k in a} for a in data["attempts"]]
+    data["measurement_notice"] = "Manifest pages count pinned source pages per case, not pages processed. Latency is per-attempt wall time across the configured targets, not retrieval-only unless the mode is retrieval_benchmark. Reserved calls/tokens are conservative ceilings, not invoices or proof of received provider responses."
     return data
 
 
