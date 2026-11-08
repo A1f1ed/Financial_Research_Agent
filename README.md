@@ -188,25 +188,36 @@ Submitted research runs in independent Celery workers and survives API restart. 
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    UI[Next.js workspace / CopilotChat] <--> Runtime[CopilotKit Runtime]
-    Runtime <-->|AG-UI / tools / shared state| Agent[FastAPI / LangGraph]
-    Runtime <--> Intelligence[Optional CopilotKit Intelligence]
-    UI <-->|Allowlisted APIs| Agent
-    Agent --> Models[Qwen / DeepSeek / GLM]
-    Agent --> Sources[Read-only market data]
-    Agent <--> PG[PostgreSQL + pgvector]
-    Agent --> Outbox[Transactional outbox]
-    Outbox --> MQ[RabbitMQ]
-    MQ --> Workers[Research / documents / knowledge / evaluation workers]
-    Workers <--> PG
-    Workers <--> S3[S3-compatible originals and artifacts]
-    Workers <--> Neo4j[Reviewed graph projection]
-    Workers <--> Redis[Disposable cache]
-    Workers --> Models
-    Workers -. metadata only .-> Langfuse[Optional Langfuse]
+```text
+Browser: Next.js workspace
+|
++-- Native CopilotChat
+|   `-- CopilotKit Runtime
+|       +-- AG-UI <--> FastAPI / LangGraph
+|       `-- CopilotKit Intelligence (optional)
+|
+`-- Research, knowledge, graph, evaluation and settings pages
+    `-- Allowlisted API proxy <--> FastAPI / LangGraph
+
+Backend: FastAPI / LangGraph
+|
++-- Qwen / DeepSeek / GLM
++-- Read-only market data and Python calculations
++-- PostgreSQL + pgvector / LangGraph checkpoints
+|
+`-- Transactional outbox
+    `-- RabbitMQ
+        `-- Celery workers
+            +-- Research / documents / knowledge / evaluations
+            +-- PostgreSQL + pgvector
+            +-- S3-compatible originals and artifacts
+            +-- Neo4j reviewed graph projections
+            +-- Redis TTL cache
+            +-- Qwen / DeepSeek / GLM
+            `-- Langfuse: metadata-only traces (optional)
 ```
+
+Chat uses AG-UI for streaming events, tool calls and shared state. Page actions use the allowlisted API proxy. Both reach the same FastAPI backend; durable background work runs in dedicated Celery workers.
 
 | Layer | Technology and role |
 | --- | --- |
