@@ -112,9 +112,17 @@ class JobRepository:
                 raise MissingRecord("Task does not exist")
             payload = job.config if job is not None else report["config"]
             if job is not None and job.kind in {"document", "knowledge", "evaluation"}:
+                elapsed = job.elapsed_seconds or 0
+                if job.started_at and job.status == "running":
+                    elapsed = max(elapsed, (datetime.now(UTC)-job.started_at).total_seconds())
+                elif job.started_at and job.status == "cancelled" and not elapsed:
+                    # Older records did not persist cancellation duration. Read the
+                    # existing audit timestamp without changing or replaying the job.
+                    ended = db.scalar(select(RunEvent.created_at).where(RunEvent.run_id==key,RunEvent.kind=="task.cancelled").order_by(RunEvent.created_at.desc()).limit(1))
+                    if ended: elapsed = max(0, (ended-job.started_at).total_seconds())
                 return {"id": key, "name": job.name, "kind": job.kind, "status": job.status, "error": job.error,
                         "document_id": job.result.get("document_id") or job.config.get("document_id"), "config": {},
-                        "result": job.result, "stages": job.progress, "elapsed_seconds": job.elapsed_seconds,
+                        "result": job.result, "stages": job.progress, "elapsed_seconds": elapsed,
                         "report_id": None, "has_assessment": False}
             return {"id": key, "name": job.name if job else f"{report['symbol']} 单股分析",
                     "status": job.status if job else report["status"], "error": job.error if job else None,
@@ -230,6 +238,8 @@ class JobRepository:
             if job is None:
                 raise MissingRecord("Task does not exist")
             if job.status not in TERMINAL:
+                if job.started_at:
+                    job.elapsed_seconds = max(job.elapsed_seconds or 0, (datetime.now(UTC)-job.started_at).total_seconds())
                 job.cancel_requested, job.status = True, "cancelled"
                 job.lease_token, job.lease_until = None, None
                 job.version += 1

@@ -151,11 +151,16 @@ class EvaluationTests(unittest.IsolatedAsyncioTestCase):
         key=self.start(version,repetitions=2);token=str(uuid4());JobRepository().claim(key,token)
         from src.evaluations.execution import save_result
         with transaction() as db:
+            db.get(Job,key).started_at=datetime.now(timezone.utc)-timedelta(seconds=2)
             attempt=db.scalar(select(EvaluationAttempt).where(EvaluationAttempt.run_id==key).order_by(EvaluationAttempt.record_order));attempt.status="in_flight";attempt_id=attempt.id
+        self.assertGreaterEqual(JobRepository().task_detail(key)["elapsed_seconds"],2)
         save_result(key,attempt_id,token,"passed",{"checks":{"contract":True}},.1)
         JobRepository().cancel(key)
         result=self.repo.detail(key)
         self.assertEqual(result["summary"]["counts"]["passed"],1);self.assertEqual(result["summary"]["counts"]["cancelled"],1)
+        self.assertGreaterEqual(JobRepository().task_detail(key)["elapsed_seconds"],2)
+        with transaction() as db: db.get(Job,key).elapsed_seconds=0
+        self.assertGreaterEqual(JobRepository().task_detail(key)["elapsed_seconds"],2)
         with self.assertRaises(StateConflict):save_result(key,attempt_id,token,"failed",{},.1)
 
     async def test_actual_agent_graph_excludes_frozen_expectations_and_records_calls(self):
@@ -205,6 +210,52 @@ class EvaluationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["attempts"][0]["calculation"]["period_end"], "2026-06-30")
         self.assertEqual(result["attempts"][0]["citations"][0]["document_id"], self.document)
         self.assertTrue(result["attempts"][0]["citations"][0]["quote"])
+
+    async def test_legacy_mapping_validates_originals_without_publishing_or_running(self):
+        from copy import deepcopy
+        from sqlalchemy import func
+        from src.persistence.models import EvaluationDataset
+        doc = self.material("Synthetic legacy source for explicit mapping")
+        payload = {"version":"synthetic-legacy","split_policy":{},"default_scope":{"as_of":"2026-10-31"},"cases":[
+            {"id":"mapped-development","category":"financial","split":"development","question":"Check disclosed units","evidence":{"original":[2]},"expected":{"note":"MANUAL_REFERENCE_ONLY"}},
+            {"id":"mapped-frozen","category":"vision","split":"acceptance","question":"Frozen vision probe","evidence":{"original":[1]}}]}
+        app = FastAPI(); app.include_router(router)
+        with transaction() as db: before_jobs = db.scalar(select(func.count()).select_from(Job))
+        with TestClient(app) as client:
+            response = client.post("/research/evaluations/datasets/import",json={"name":"Mapped online contract","payload":payload,"source_documents":{"original":doc}})
+            self.assertEqual(response.status_code,201,response.text)
+            key = response.json()["id"]
+            self.assertEqual(self.repo.dataset(key)["versions"],[])
+            public = client.get(f"/research/evaluations/datasets/{key}").json()
+            self.assertTrue(public["cases"][1]["protected"])
+            self.assertEqual(public["cases"][0]["expected"]["manual_reference"]["original_expected"]["note"],"MANUAL_REFERENCE_ONLY")
+            for changed in ({}, {"original":str(uuid4())}):
+                result = client.post("/research/evaluations/datasets/import",json={"payload":payload,"source_documents":changed})
+                self.assertIn(result.status_code,(409,422))
+            missing_page = deepcopy(payload); missing_page["cases"][0]["evidence"]["original"] = [3]
+            self.assertEqual(client.post("/research/evaluations/datasets/import",json={"payload":missing_page,"source_documents":{"original":doc}}).status_code,409)
+            malformed = deepcopy(payload); malformed["cases"] = [None]
+            self.assertEqual(client.post("/research/evaluations/datasets/import",json={"payload":malformed,"source_documents":{"original":doc}}).status_code,422)
+            with transaction() as db: db.get(Document,doc).archived=True
+            self.assertEqual(client.post("/research/evaluations/datasets/import",json={"payload":payload,"source_documents":{"original":doc}}).status_code,409)
+        with transaction() as db:
+            self.assertEqual(db.scalar(select(func.count()).select_from(Job)),before_jobs)
+            self.assertEqual(db.scalar(select(func.count()).select_from(EvaluationDataset)),1)
+            self.assertEqual(db.scalar(select(func.count()).select_from(EvaluationVersion)),0)
+            self.assertEqual(db.scalar(select(func.count()).select_from(EvaluationRun)),0)
+
+    async def test_archiving_preserves_running_work_and_matching_comparison(self):
+        data, version = self.publish([self.case(target="task_list",scope=None)])
+        old = self.start(version)
+        row = self.repo.dataset(data["id"])
+        archived = self.repo.archive(data["id"],row["revision"],True)
+        with self.assertRaises(StateConflict): self.start(version)
+        await run_job(old)
+        self.assertEqual(self.repo.detail(old)["status"],"complete")
+        self.repo.archive(data["id"],archived["revision"],False)
+        new = self.start(version,parent_run_id=old); await run_job(new)
+        self.assertTrue(self.repo.compare(old,new)["comparable"])
+        self.assertEqual(self.repo.detail(old)["summary"]["counts"]["passed"],1)
 
     async def test_page_budget_and_concurrent_runs(self):
         doc=self.material("Synthetic source");await self.build(doc)

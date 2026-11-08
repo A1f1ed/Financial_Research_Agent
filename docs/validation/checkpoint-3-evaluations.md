@@ -1,5 +1,7 @@
 # Checkpoint 3 — evaluation center early-review snapshot
 
+**Current status:** remaining functional acceptance is complete; see the [completion record](checkpoint-3-completion.md). Outstanding items and gates below describe the earlier snapshot and remain as history, not current status.
+
 Date: 2026-11-08. Branch: `codex/research-knowledge-v1`. The user authorized checkpoint 3 and then requested early branch acceptance. **This is a reviewable implementation snapshot, not checkpoint-3 completion or permission to start checkpoint 4.** Main has not been merged. No production deployment, final CI/PR or whole-PRD quality pass is claimed.
 
 ## Implemented and exercised

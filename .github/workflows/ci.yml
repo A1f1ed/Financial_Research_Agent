@@ -35,6 +35,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx tsx scripts/test-agent-stream.mts
       - run: npx tsx scripts/test-graph-evidence-selection.mts
+      - run: npx tsx scripts/test-evaluation-interactions.mts
       - run: node --test scripts/finalize-build.test.mjs
 
   backend:

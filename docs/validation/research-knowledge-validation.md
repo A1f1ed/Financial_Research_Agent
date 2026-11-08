@@ -1,5 +1,7 @@
 # Research knowledge validation matrix
 
+**Current checkpoint 3:** remaining functional acceptance completed on 2026-11-08; [evidence and explicit coverage limits](checkpoint-3-completion.md). This supersedes early-review outstanding items below without promoting the broader PRD matrix to passing.
+
 Requirement source: [PRD v1.5](../PRD-research-knowledge.md) and the [four-checkpoint release plan](../releases/knowledge-v0.2.md). The latter explicitly defers vision/Wiki/incremental tracking and advanced governance to a later release, while retaining RAG/GraphRAG acceptance and an actual in-app evaluation center for this GitHub delivery. **No full-roadmap stage is declared complete.** Historical evidence below is not silently promoted to a new release pass.
 
 **Latest update, 2026-11-08:** checkpoint 2 is functionally accepted within its approved scope ([record](checkpoint-2-rag-graph.md)). Checkpoint 3 now has a reviewable in-app evaluation implementation and real service/browser runs; see [early-review evidence and remaining acceptance](checkpoint-3-evaluations.md). It is not yet declared complete. The broader historical matrix below is not a claim of full PRD or production readiness.
