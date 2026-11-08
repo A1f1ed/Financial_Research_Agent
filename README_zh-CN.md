@@ -186,23 +186,36 @@ npm run start:all
 
 ## 架构与开发
 
-```mermaid
-flowchart LR
-    UI[Next.js 工作台 + 原生 CopilotChat] <--> Runtime[CopilotKit Runtime]
-    Runtime <-->|AG-UI 流式事件与共享状态| Agent[FastAPI + LangGraph]
-    Runtime <--> Intelligence[可选 CopilotKit Intelligence]
-    UI <-->|白名单研究与设置 API| Agent
-    Agent --> Research[证据 → 分析师 → 多空与风险审查 → 报告]
-    Research --> Models[Qwen / DeepSeek / GLM]
-    Research --> Sources[只读市场数据 + Python 指标]
-    Agent <--> PG[PostgreSQL: 业务与 checkpoint]
-    Agent --> Outbox[事务 outbox]
-    Outbox --> RabbitMQ
-    RabbitMQ --> Workers[独立 Celery workers]
-    Workers --> PG
-    Workers --> Research
-    Workers <--> Redis[临时市场数据缓存]
+```text
+浏览器：Next.js 工作台
+|
++-- 原生 CopilotChat
+|   `-- CopilotKit Runtime
+|       +-- AG-UI <--> FastAPI / LangGraph
+|       `-- CopilotKit Intelligence（可选）
+|
+`-- 研究、知识库、图谱、评测与设置页面
+    `-- 白名单 API 代理 <--> FastAPI / LangGraph
+
+后端：FastAPI / LangGraph
+|
++-- Qwen / DeepSeek / GLM
++-- 只读市场数据与 Python 计算
++-- PostgreSQL + pgvector / LangGraph checkpoints
+|
+`-- 事务 outbox
+    `-- RabbitMQ
+        `-- Celery workers
+            +-- 研究 / 文档 / 知识处理 / 评测
+            +-- PostgreSQL + pgvector
+            +-- S3 兼容存储：原件与处理产物
+            +-- Neo4j 已审核图谱投影
+            +-- Redis TTL 缓存
+            +-- Qwen / DeepSeek / GLM
+            `-- Langfuse：仅元数据追踪（可选）
 ```
+
+聊天通过 AG-UI 传输流式事件、工具调用与共享状态；页面操作经过白名单 API 代理。两者访问同一个 FastAPI 后端，需要持久执行的后台工作由独立 Celery worker 处理。
 
 模型解释证据；代码计算指标、调度时间、条件结果和报告价格对照。
 
