@@ -39,6 +39,8 @@ Persisted output is bounded and excludes reasoning/raw source-page payloads. Res
 
 The ordinary JSON format contains `name`, `description`, `cases`; it can be exported and imported from the UI. Development-only export is the default; frozen export/reveal requires explicit human action. Legacy source contracts require mapping each symbolic source label to an uploaded exact document version. Their original human references are retained and partitions preserved. Complex numeric, relation, vision and Wiki rules are not silently translated into passing criteria: adapt supported draft checks explicitly, otherwise they remain unscored/unsupported. Imports never publish or run automatically.
 
+The mapping dialog searches/pages uploaded originals, retains selections across searches, displays referenced/available pages and publication metadata, and requires renewed confirmation after any mapping change. Backend validation rejects inactive/missing originals and out-of-range pages. Malformed files fail before rendering the mapping form. Saved native approval/decline decisions restore from chat history; restoring a decline never starts a run. Comparison and run-detail requests cancel/ignore stale responses when switching, and filtered attempt loading retains the current run summary.
+
 ## Operations
 
 Migration `49ba0cbc7efc` adds evaluation datasets, versions, runs and attempts. Apply migrations before starting workers. Compose includes `evaluation-worker` on the dedicated `evaluation` queue. Reuse the existing API/dispatcher, RabbitMQ, PostgreSQL and objects services. The worker calls a fixed internal API URL (`APERTURE_EVALUATION_API_URL`, Docker default `http://api:8123`), not a user-supplied benchmark address.
@@ -49,4 +51,4 @@ docker compose --env-file infra/.env -f infra/compose.yaml up -d --build api eva
 
 The Next.js research proxy exposes a fixed evaluation route allowlist. APIs are under `/research/evaluations`: datasets/create/edit/import/export/publish/archive/restore, versions, runs/start/detail/cancel/retry/export/attempts and compare. Writes use existing same-origin checks. Existing local deployment authentication limitations still apply; this feature does not establish production SaaS security.
 
-See [checkpoint 3 acceptance](validation/checkpoint-3-evaluations.md) for actual run evidence and remaining release gates. Vision, Wiki, automated semantic judges and broad frozen-set quality targets remain outside this checkpoint.
+See [checkpoint 3 completion](validation/checkpoint-3-completion.md) for final functional acceptance and the [earlier snapshot](validation/checkpoint-3-evaluations.md) for initial run evidence. Vision, Wiki, automated semantic judges and broad frozen-set quality targets remain outside this checkpoint.

@@ -8,7 +8,8 @@ from fastapi import APIRouter, Query, Request, Response
 from src.documents.api import authorize_write, run
 from src.persistence.jobs import JobRepository
 from src.persistence.database import transaction
-from src.persistence.models import EvaluationVersion
+from src.persistence.models import EvaluationVersion, Document
+from src.persistence.jobs import StateConflict
 from .contracts import DatasetInput, DatasetEdit, RevisionAction, RunOptions
 from .repository import EvaluationRepository, required
 from .imports import ImportRequest, import_dataset
@@ -20,7 +21,20 @@ router = APIRouter(prefix="/research/evaluations")
 def import_cases(inputs:ImportRequest,request:Request):
     from fastapi import HTTPException
     authorize_write(request)
-    try:return run(lambda:EvaluationRepository().save(import_dataset(inputs)))
+    def save():
+        draft=import_dataset(inputs)
+        if "split_policy" in inputs.payload:
+            with transaction() as db:
+                originals={label:db.get(Document,str(key)) for label,key in inputs.source_documents.items()}
+                for case in inputs.payload["cases"]:
+                    for label,pages in case.get("evidence",{}).items():
+                        original=originals.get(label)
+                        if original is None or original.removed_at or original.archived:
+                            raise StateConflict("Select an existing active original for every source label")
+                        if any(page > original.page_count for page in pages):
+                            raise StateConflict("A referenced PDF page does not exist in its mapped original")
+        return EvaluationRepository().save(draft)
+    try:return run(save)
     except ValueError as error:raise HTTPException(422,str(error)) from None
 
 

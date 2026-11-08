@@ -1,5 +1,7 @@
 # Research knowledge implementation progress
 
+**Latest, 2026-11-08:** checkpoint 3's remaining functional acceptance is complete within the release boundary: legacy mapping/rule adaptation, decline/history, archive/restore, matching comparisons, downloads, cancellation races and controlled slow-response switching. See [completion evidence](checkpoint-3-completion.md). Follow-up branch: `codex/evaluation-acceptance`; PR/CI/main status is in the [delivery log](github-knowledge-delivery.md). Earlier gate statements below are historical. Deferred PRD/quality modules remain unfinished; pause after verified delivery.
+
 Baseline: [PRD v1.5](../PRD-research-knowledge.md), retaining the complete in-app knowledge/GraphRAG/visualization/evaluation roadmap and adding a user-approved [four-checkpoint GitHub release plan](../releases/knowledge-v0.2.md). Each checkpoint needs the user's explicit authorization before the next starts. This file records historical implementation evidence; unfinished long-term stages are not relabeled complete by the release split.
 
 **GitHub delivery follow-up:** the user has now explicitly authorized README updates and PR/main merge. Core evaluation, live Agent human-approved start and graph/calculation original-page paths are exercised; actual screenshots and CI were added. [Delivery record](github-knowledge-delivery.md) and PR #2 distinguish this runnable single-user scope from unfinished roadmap/quality work. After merge verification, pause rather than begin deferred features.
