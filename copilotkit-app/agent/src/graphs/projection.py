@@ -102,7 +102,7 @@ async def execute_projection(payload,job_id,token):
     return {"status":"complete","_finished":True}
 
 
-def query_graph(key,inputs,*,bind=None):
+def query_graph(key,inputs,*,bind=None,allowed_document_ids=None):
     began=perf_counter()
     with transaction(bind) as db:
         graph=graph_row(db,key,active=True)
@@ -112,6 +112,7 @@ def query_graph(key,inputs,*,bind=None):
         if projection is None or not projection.published: raise StateConflict("No published graph projection is available")
         scope=current_scope(db,graph,as_of=inputs.as_of)
         eligible={item["id"] for item in scope["documents"] if item["eligible"]}
+        if allowed_document_ids is not None:eligible.intersection_update(allowed_document_ids)
         current_nodes={row.id:row for row in db.scalars(select(GraphEntity).where(GraphEntity.graph_id==key,GraphEntity.archived.is_(False)))}
         origin=owned(db,GraphEntity,str(inputs.entity_id),key)
         nodes={item["id"]:item for item in projection.snapshot["nodes"] if item["id"] in current_nodes
@@ -153,6 +154,7 @@ def query_graph(key,inputs,*,bind=None):
             "scope":scope,"nodes":[nodes[n] for n in sorted(selected_nodes)],"edges":[edges[e] for e in sorted(selected_edges)],"paths":bounded,
             "truncated":truncated,"limits":{"nodes":100,"edges":200,"hops":2,"paths":1000},
             "elapsed_ms":round((perf_counter()-began)*1000,3),"notice":"Disclosed relationships and inferred influence paths remain distinct; inclusion is not numerical impact verification."}
+        if allowed_document_ids is not None:result["authorized_document_ids"]=sorted(allowed_document_ids)
         db.add(GraphQuery(id=result["id"],graph_id=key,inputs=inputs.model_dump(mode="json"),snapshot=result,name=inputs.name))
         return result
 

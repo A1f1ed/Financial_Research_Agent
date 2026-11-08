@@ -208,7 +208,7 @@ uv run python -m unittest discover -s tests -v
 
 Python 测试需要运行真实 PostgreSQL/Redis，使用独立测试库和缓存前缀，覆盖研究边界、任务、计划、报告对照、复盘、追问与提供商配置。提供商失败测试使用受控错误；真实连接测试会消耗少量模型请求。
 
-研究知识功能仍在持续开发：当前工作区已有在线集合/资料管理、限定范围混合检索、原生文档问答，以及第一条证据审核式 GraphRAG 管理及交互路径流程。关系自动抽取及明确身份审核已有实现和针对性测试，真实模型完整网页链路尚未验收。参阅[资料库](docs/document-library.md)、[图谱研究](docs/graph-research.md)和[验收矩阵](docs/validation/research-knowledge-validation.md)。完整知识生命周期、视觉核验、Wiki/论点、App 内评测及完整生产验收仍待完成；部分可运行链路不代表完整产品已交付。
+研究知识功能已有在线集合/资料管理、限定范围关键词/混合检索、原生文档问答、人工核实数字与可复算的 Decimal 计算，以及单股任务的精确文档版本绑定。GraphRAG 支持自动提议、人工身份/关系审核、发布、可视化路径和文档聊天中的只读图谱工具。[检查点 2 验收记录](docs/validation/checkpoint-2-rag-graph.md)列出真实公开资料的网页闭环、生产模式 UI 验证及未覆盖项。参阅[资料库](docs/document-library.md)、[图谱研究](docs/graph-research.md)和[完整路线图验收矩阵](docs/validation/research-knowledge-validation.md)。App 内评测、视觉核验、Wiki/论点、高级生命周期/治理及完整生产验收仍待完成。目前为功能分支检查点，尚未最终发布或经 PR 合并。
 
 实际验收路径和未覆盖项见 [验收记录](copilotkit-app/VALIDATION.md)，剩余缺口见 [研究路线图](copilotkit-app/RESEARCH-ROADMAP.md)。本机构建成功不代表已经达到商业化生产服务要求。
 

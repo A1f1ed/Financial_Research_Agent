@@ -3,7 +3,11 @@ import asyncio
 from datetime import date
 import os
 import unittest
+import json
+from types import SimpleNamespace
 from unittest.mock import patch
+from langchain_core.messages import HumanMessage,AIMessage
+from langchain.agents.middleware import ModelResponse
 from uuid import uuid4
 
 from fastapi import FastAPI
@@ -63,6 +67,35 @@ class GraphTests(unittest.TestCase):
         row=self.enqueue(force)
         self.assertEqual(asyncio.run(run_job(row["job_id"]))["status"],"complete")
         return row
+
+    def test_native_paths_are_bound_to_document_versions_and_preserve_citations(self):
+        from src.graphs.tools import find_research_graph_entities,read_research_graph_paths
+        from src.knowledge.conversations import ConversationRepository
+        from src.knowledge.contracts import ConversationRequest
+        from src.knowledge.agent_scope import validate_response
+        from src.graphs.projection import GraphUnavailable
+        outside=self.material("Synthetic secret outside current conversation.")
+        self.graph=self.repository.create(GraphInput(name="Synthetic broader graph",scope=ScopeRequest(collection_ids=[self.collection["id"]],as_of="2026-10-31")));self.key=self.graph["id"]
+        root=self.entity("Synthetic Alpha group");inside=self.entity("Synthetic Alpha brand","product")
+        quote="Synthetic secret outside current conversation."
+        foreign=self.entity("Synthetic secret","product",EvidenceInput(document_id=outside,page_number=2,start_offset=0,end_offset=len(quote),quote=quote))
+        edge=self.accept(self.relation(root,inside));self.accept(self.relation(root,foreign));self.sync()
+        binding=ConversationRepository().create(ConversationRequest(thread_id=uuid4(),document_ids=[self.document],as_of="2026-10-31"))
+        runtime=SimpleNamespace(config={"configurable":{"thread_id":binding["thread_id"]}},tool_call_id="synthetic-graph",state={"messages":[HumanMessage(content="Synthetic Alpha relationships",id="graph-turn")]})
+        found=asyncio.run(find_research_graph_entities.coroutine("Synthetic",runtime))
+        entities=json.loads(found.update["messages"][0].content)["entities"]
+        self.assertNotIn(foreign["id"],{item["entity_id"] for item in entities})
+        command=asyncio.run(read_research_graph_paths.coroutine(self.key,root["id"],runtime))
+        result=json.loads(command.update["messages"][0].content)
+        self.assertEqual({item["id"] for item in result["edges"]},{edge["id"]})
+        self.assertEqual({item["document_id"] for item in result["citations"]},{self.document})
+        answer=ModelResponse(result=[AIMessage(content="Synthetic relationship. "+result["citations"][0]["citation_markdown"])])
+        self.assertEqual(validate_response(SimpleNamespace(messages=runtime.state["messages"]),answer,binding["thread_id"]).result[-1].text,answer.result[-1].text)
+        denied=json.loads(asyncio.run(read_research_graph_paths.coroutine(self.key,foreign["id"],runtime)).update["messages"][0].content)
+        self.assertEqual(denied["status"],"graph_scope_unavailable")
+        with patch("src.graphs.tools.query_graph",side_effect=GraphUnavailable("Synthetic graph outage")):
+            failed=json.loads(asyncio.run(read_research_graph_paths.coroutine(self.key,root["id"],runtime)).update["messages"][0].content)
+        self.assertEqual(failed["status"],"graph_service_failed")
 
     def query(self,entity,**kwargs):
         return query_graph(self.key,GraphQueryInput(entity_id=entity["id"],as_of="2026-10-31",**kwargs))

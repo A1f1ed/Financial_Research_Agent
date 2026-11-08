@@ -10,7 +10,7 @@ from .conversations import ConversationRepository, turn_id
 
 LINK = re.compile(r"\[(K[1-9][0-9]*)\]\((/evidence/([a-f0-9-]{36})/(K[1-9][0-9]*))\)")
 TOKEN = re.compile(r"\[(?:K[0-9]+|S[0-9]+)\]")
-DOCUMENT_TOOLS={"search_research_documents","read_research_document_context","list_reviewed_research_figures","calculate_reviewed_research_figures"}
+DOCUMENT_TOOLS={"search_research_documents","read_research_document_context","list_reviewed_research_figures","calculate_reviewed_research_figures","find_research_graph_entities","read_research_graph_paths"}
 
 
 def runtime_thread(request):
@@ -39,6 +39,11 @@ incompatible, explain what must be reviewed in the Knowledge base; do not do
 mental arithmetic, convert units independently or invent a calculation result.
 User-confirmed column/period/basis interpretation is distinct from code-checked
 source tokens/units and Decimal arithmetic. Never claim full reconciliation.
+For relationships, discover identities then read accepted graph paths. The server
+restricts paths to the same exact documents and cutoff. Explicitly distinguish
+disclosed relationships from inferred influence. A graph path is not measured
+financial impact. Knowledge cutoff and earlier applicability date are separate.
+Never extract, approve, modify or synchronize a graph through conversation tools.
 Every key factual claim must use the EXACT returned citation_markdown, including
 its /evidence/search-id/Kn URL. Never invent an ID or use a previous turn's ID.
 If retrieval fails or lacks support, explain the missing evidence and abstain.

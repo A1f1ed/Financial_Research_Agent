@@ -16,6 +16,7 @@ from src.todos import AgentState, todo_tools
 from src.research_workflow import run_financial_research, read_current_research
 from src.knowledge.tools import search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures
 from src.knowledge.conversations import ConversationRepository
+from src.graphs.tools import find_research_graph_entities,read_research_graph_paths
 from src.knowledge.agent_scope import runtime_thread, scoped_request, validate_response, DOCUMENT_TOOLS
 from langchain_core.messages import ToolMessage
 
@@ -71,7 +72,7 @@ def build_graph(checkpointer):
 
     return create_agent(
         model=create_chat_model("openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False}),
-        tools=[run_financial_research, read_current_research, search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures, query_data, *todo_tools, generate_a2ui, search_flights],
+        tools=[run_financial_research, read_current_research, search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures, find_research_graph_entities, read_research_graph_paths, query_data, *todo_tools, generate_a2ui, search_flights],
         middleware=[CopilotKitMiddleware(), current_model, scoped_tools,
             StateStreamingMiddleware(StateItem(state_key="todos", tool="manage_todos", tool_argument="todos")),
             *([skills] if skills is not None else [])],

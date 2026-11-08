@@ -1,6 +1,7 @@
 "use client";
 
 import { useT } from "@/hooks/use-language";
+import {useMessageSnapshots} from "@/hooks/use-message-snapshots";
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { Activity, ArrowUpRight, Check, Clock3, LoaderCircle, MessageSquare } from "lucide-react";
@@ -9,8 +10,11 @@ import { FollowupContext, useFollowupView } from "@/components/chat-followups";
 import { cachedResearchHistory, readResearchHistory } from "@/lib/research-history";
 import { STAGE_NAMES, STATUS_NAMES, type Report, type ResearchConfig } from "@/lib/research";
 import { researchRequest } from "@/components/workbench-panels";
+import { ResearchScopeSummary } from "@/components/knowledge/research-scope-summary";
+import type {ResearchKnowledgeSnapshot} from "@/lib/research";
 
 type Progress = {
+  knowledge_scope?: ResearchKnowledgeSnapshot;
   kind?: string;
   document_id?: string;
   result?: { collection_assignment?: { status: string } | null };
@@ -95,6 +99,7 @@ export function ResearchTask({ id, onReport, onDocument, onRetry }: { id: string
       {materialTask ? <p className="muted">{t(task.kind === "knowledge" ? "知识任务" : "资料处理")} · {t("已用时间")}: {Math.round(task.elapsed_seconds)} {t("秒")}</p>
         : <p className="muted">{t(task.workflow ? task.config.market : task.config.symbol)}{t("· 截至")}{t(task.config.as_of)}</p>}
       {task.status === "queued" && <p role="status"><Clock3 size={15} />{t(materialTask ? "正在等待资料处理服务，运行后显示实际阶段。" : "正在排队，进入运行后显示预计时间。")}</p>}
+      <ResearchScopeSummary scope={task.knowledge_scope}/>
       {task.status === "running" && !materialTask && <p role="status"><LoaderCircle className="spin" size={15} /> {t(task.stages.length
         ? `预计剩余 ${estimateRemaining(task)} · 已处理 ${completed}/${task.stages.length} 个阶段`
         : "正在准备研究流程…")}</p>}
@@ -146,6 +151,7 @@ function ReportChatView(props: CopilotChatViewProps) {
 function ReportChat({ id, agentId, symbol }: { id: string; agentId: string; symbol: string }) {
   const t = useT();
   const { agent, isReady } = useAgent({ agentId, threadId: id, runtimeAgentId: "default" });
+  useMessageSnapshots(agent);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);

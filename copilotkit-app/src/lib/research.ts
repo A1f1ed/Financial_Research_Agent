@@ -11,6 +11,7 @@ export type ResearchConfig = {
   symbol: string; market: "HK" | "US" | "SH" | "SZ" | "SG"; as_of: string;
   analysts: Analyst[]; depth: "quick" | "standard" | "deep";
   include_risk: boolean; include_sentiment: boolean; question: string; benchmark: string; peers: string[];
+  knowledge_collection_ids?: string[]; knowledge_search_mode?: "keyword" | "hybrid";
 };
 export const DEFAULT_CONFIG: ResearchConfig = {
   symbol: "1211.HK", market: "HK", as_of: "2026-10-31", analysts: ANALYSTS.map(a => a.id),
@@ -18,7 +19,7 @@ export const DEFAULT_CONFIG: ResearchConfig = {
   question: "分析财务质量、增长驱动、估值依据、技术趋势与主要风险。", benchmark: "2800.HK", peers: ["175.HK", "2015.HK"],
 };
 export type Finding = { summary: string; stance: string; findings: string[]; risks: string[]; missing: string[]; source_ids: string[] };
-export type Source = { id: string; title: string; kind: string; provider: string; content: string; published_at: string | null; url: string; excerpt_only?: boolean; event_date?: string; filing_url?: string | null };
+export type Source = { id: string; title: string; kind: string; provider: string; content: string; published_at: string | null; url: string; excerpt_only?: boolean; event_date?: string; filing_url?: string | null; document_id?:string; page_number?:number; knowledge_search_id?:string; knowledge_citation_id?:string; document_version?:number };
 export type Report = {
   workflow?: string;
   id: string; symbol: string; as_of: string; created_at: string; status: string; config: ResearchConfig; elapsed_seconds: number;
@@ -26,8 +27,9 @@ export type Report = {
   assessment?: { summary: string; stance: string; key_points: string[]; risks: string[]; catalysts: string[]; risk_level: string; valuation_scenarios: string[]; invalidation_conditions: string[] };
   stages: { id: string; status: string; detail?: string }[];
   findings: Record<string, Finding>;
-  evidence: { sources: Source[]; gaps: string[]; bars: { date: string; close: number; volume?: number }[]; metrics: Record<string, unknown>; fetched_at?: string; methodology?: string; excluded_after_cutoff_or_undated?: number };
+  evidence: { sources: Source[]; gaps: string[]; bars: { date: string; close: number; volume?: number }[]; metrics: Record<string, unknown>; fetched_at?: string; methodology?: string; excluded_after_cutoff_or_undated?: number; knowledge_scope?: ResearchKnowledgeSnapshot };
 };
+export type ResearchKnowledgeSnapshot={pinned_at:string;eligible_count:number;excluded_count:number;collections:{id:string;name:string;revision:number}[];cutoff:{as_of:string;market:string};documents:{id:string;title:string;version:number;metadata_revision:number;eligible:boolean;exclusion:string|null}[]};
 export type ReportSummary = Pick<Report, "id" | "symbol" | "as_of" | "created_at" | "status" | "config" | "assessment" | "workflow">;
 const reportTime = new Intl.DateTimeFormat("sv-SE", {
   timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
@@ -36,6 +38,7 @@ const reportTime = new Intl.DateTimeFormat("sv-SE", {
 export const formatReportTime = (value: string) => Number.isFinite(Date.parse(value)) ? reportTime.format(new Date(value)) : "时间未知";
 export const STAGE_NAMES: Record<string, string> = {
   data: "证据采集", ...Object.fromEntries(ANALYSTS.map(a => [a.id, a.name])),
+  documents: "资料原页检索",
   bull: "多头研究", bear: "空头研究", risk: "风险审查", synthesis: "研究总结",
 };
 export const STATUS_NAMES: Record<string, string> = { pending: "等待", running: "进行中", complete: "已完成", partial: "部分完成", failed: "失败", cancelled: "已停止" };

@@ -37,6 +37,14 @@ Implementation references: [Neo4j managed transactions](https://neo4j.com/docs/p
 
 ## Validation
 
+### Read-only tools in document chat
+
+Fixed-scope document conversations can use `find_research_graph_entities` and `read_research_graph_paths`. Discovery returns bounded identities from currently published graphs in the same market timezone with original evidence in the conversation's exact document versions. Traversal uses the existing Neo4j service, current accepted relationships, a two-hop limit and an additional server-side document allowlist. The model cannot submit Cypher, extract relationships, approve proposals or synchronize through these tools.
+
+Knowledge cutoff is fixed by the conversation. An optional earlier applicability date does not pretend that later-published knowledge was available on that earlier day. Inferred influence is opt-in and remains distinct from disclosed relationships. Chat sends at most three paths and one bounded original excerpt per identity/relationship, with explicit truncation and saved query IDs. Full query evidence remains in GraphRAG history. Returned citations are saved as current-turn document evidence and open the original PDF page; they pass the same identity/scope checks as retrieved document citations. Graph service failure is reported as failure, not an empty economic relationship set.
+
+The focused synthetic graph/document-chat suite passed 19 tests in 17.030 seconds against isolated PostgreSQL and real Neo4j, including a broader graph whose out-of-conversation identity/path is excluded. Actual policy-chat acceptance subsequently passed with fresh native tools and original-page citations: July 5 applicability returns the provisional announcement path; November 1 returns both separate provisional/definitive announcement paths. A real stream-delivery failure was fixed and retained in history before successful retry and production runs. See [checkpoint 2 acceptance](validation/checkpoint-2-rag-graph.md) for identifiers, aggregate checks and unproven broader quality/operational gates. The evaluation center and final release remain pending separate authorization.
+
 ```powershell
 # copilotkit-app/agent, with the existing local services running
 $env:APERTURE_RUN_INTEGRATION='1'

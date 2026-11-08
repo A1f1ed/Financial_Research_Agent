@@ -1,6 +1,7 @@
 "use client";
 
 import { useLanguage, useT } from "@/hooks/use-language";
+import {useMessageSnapshots} from "@/hooks/use-message-snapshots";
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { Activity, BookOpen, Bot, CalendarClock, ClipboardList, Database, GitFork, MessageSquare, Plus, ArrowUpRight, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, FlaskConical, Layers3, LoaderCircle, Play, Settings2, ShieldCheck, Square, X, Sun, Moon } from "lucide-react";
@@ -16,6 +17,8 @@ import { CandidateButton, useReviewCandidates } from "@/components/review-candid
 import { ReportLibrary } from "@/components/report-library";
 import { DocumentLibrary } from "@/components/documents/library";
 import { KnowledgeWorkspace } from "@/components/knowledge/workspace";
+import { ResearchKnowledgeSelection } from "@/components/knowledge/research-selection";
+import { ResearchScopeSummary } from "@/components/knowledge/research-scope-summary";
 import { GraphWorkspace } from "@/components/graphs/workspace";
 import { KnowledgeChatScope, type CitationSelection } from "@/components/knowledge/chat-scope";
 import { KnowledgeCitationViewer } from "@/components/knowledge/citation-viewer";
@@ -66,6 +69,7 @@ export function ResearchWorkspace() {
   const t = useT();
   const { theme, setTheme } = useTheme();
   const { agent, isReady } = useAgent();
+  useMessageSnapshots(agent);
   const chatConfiguration = useCopilotChatConfiguration();
   const threadId = chatConfiguration?.threadId;
   useGenerativeUIExamples();
@@ -389,6 +393,7 @@ export function ResearchWorkspace() {
                   <label className="question-label">{t("研究问题")}<textarea rows={3} value={t(config.question)} maxLength={2000} onChange={e => updateConfig({ ...config, question: e.target.value })} /></label>
                   <p className="field-note">{t("非交易日使用此前最近交易日。发布时间不明或晚于截止日的数据会被排除。")}</p></section>
                 {aShare && <AShareEvents key={`${aShare}:${config.as_of}`} symbol={aShare} asOf={config.as_of} />}
+                <ResearchKnowledgeSelection config={config} onChange={updateConfig}/>
                 <details className="chat-config-advanced" open><summary>{t("分析师与分析选项")}</summary>
                 <section className="finance-card"><div className="section-title"><Layers3 size={18} /><h2>{t("分析师团队")}</h2><span>{t(config.analysts.length)}{t("位已选")}</span></div>
                   <div className="analyst-grid">{ANALYSTS.map(a => { const selected = config.analysts.includes(a.id); return <button type="button" key={a.id} aria-pressed={selected} className={`analyst-card ${selected ? "selected" : ""}`} onClick={() => updateConfig({ ...config, analysts: selected ? config.analysts.filter(v => v !== a.id) : [...config.analysts, a.id] })}><span className="analyst-icon">{t(a.icon)}</span><span><strong>{t(a.name)}</strong><small>{t(a.subtitle)}</small></span><span className="analyst-check">{selected && <Check size={14} />}</span></button>; })}</div></section>
@@ -434,7 +439,7 @@ export function ResearchWorkspace() {
 
             {tab === "sources" && <div className="sources-view"><div className="section-eyebrow">EVIDENCE ROOM</div><h1>{t("从观点，回到原始证据。")}</h1><p className="intro">{t(report ? `${report.symbol} · 截至 ${report.as_of} · ${report.evidence.sources.length} 条已接受证据` : "运行研究后，证据会在这里按来源和发布时间呈现。")}</p>
               {report?.evidence.methodology && <div className="methodology-note"><ShieldCheck size={18} /><p>{t(report.evidence.methodology)}</p></div>}
-              {report?.evidence.sources.map(s => <article id={`source-${s.id}`} key={s.id} className={`finance-card source-card ${sourceId === s.id ? "highlighted" : ""}`}><div className="source-meta"><span className="source-badge">{t(s.id)}</span><span>{t(eventSourceNames[s.kind] ?? s.kind)} · {t(s.provider)}</span><time>{t(s.kind === "holder_change" && s.published_at ? `公告 ${s.published_at.slice(0, 10)}` : s.event_date ? `事件 ${s.event_date}` : s.published_at?.slice(0, 10))}</time></div><h3>{t(s.title)}</h3><p>{t(s.excerpt_only ? "仅标题/摘要可用，不将其当作全文证据。" : "已获取正文或结构化数据。")}</p><details open={sourceId === s.id}><summary>{t("查看证据内容")}</summary><pre>{t(s.content)}</pre></details><a className="source-link" href={safeUrl(s.url)} target="_blank" rel="noreferrer">{t("打开原始来源")}<ExternalLink size={13} /></a>{s.filing_url && <a className="source-link" href={safeUrl(s.filing_url)} target="_blank" rel="noreferrer">{t("打开公告佐证")}<ExternalLink size={13} /></a>}</article>)}
+              {report?.evidence.sources.map(s => <article id={`source-${s.id}`} key={s.id} className={`finance-card source-card ${sourceId === s.id ? "highlighted" : ""}`}><div className="source-meta"><span className="source-badge">{t(s.id)}</span><span>{t(eventSourceNames[s.kind] ?? s.kind)} · {t(s.provider)}</span><time>{t(s.kind === "holder_change" && s.published_at ? `公告 ${s.published_at.slice(0, 10)}` : s.event_date ? `事件 ${s.event_date}` : s.published_at?.slice(0, 10))}</time></div><h3>{t(s.title)}</h3><p>{s.document_id ? (language === "en" ? "Original-page excerpt; supports only the quoted source scope." : "原页摘录，仅支持引用范围内的信息。") : t(s.excerpt_only ? "仅标题/摘要可用，不将其当作全文证据。" : "已获取正文或结构化数据。")}</p><details open={sourceId === s.id}><summary>{t("查看证据内容")}</summary><pre>{t(s.content)}</pre></details>{s.knowledge_search_id && s.knowledge_citation_id && <button type="button" className="chat-config-toggle" onClick={()=>setKnowledgeCitation({searchId:s.knowledge_search_id!,citationId:s.knowledge_citation_id!})}>{language === "en" ? "Open retained original page" : "打开保留原页"} · PDF {s.page_number} · v{s.document_version}</button>}<a className="source-link" href={safeUrl(s.url)} target="_blank" rel="noreferrer">{t("打开原始来源")}<ExternalLink size={13} /></a>{s.filing_url && <a className="source-link" href={safeUrl(s.filing_url)} target="_blank" rel="noreferrer">{t("打开公告佐证")}<ExternalLink size={13} /></a>}</article>)}
               {!!report?.evidence.gaps.length && <section className="finance-card"><h3>{t("数据覆盖与缺失")}</h3><ul>{report.evidence.gaps.map((g, i) => <li key={i}>{t(g)}</li>)}</ul></section>}
             </div>}
 
@@ -484,6 +489,7 @@ function ReportView({ report, onSource, running, onStop, onCheck, candidates }: 
     ? { symbol: report.symbol, session: baseline, benchmark: report.config.benchmark } : null;
   return <div className="report-view"><div className="report-topline"><span className="section-eyebrow">RESEARCH BRIEF</span><span className={`status-badge ${report.status}`}>{t(STATUS_NAMES[report.status] || report.status)}</span></div>
     <div className="report-title"><div><h1>{t(report.symbol)} <span>{t("研究报告")}</span></h1><p>{t("截至")}{t(report.as_of)} · {t(report.config.analysts.length)}{t("位分析师 ·")}{t(report.elapsed_seconds.toFixed(0))}s</p><p>{t("生成于")}<time dateTime={report.created_at}>{t(formatReportTime(report.created_at))}</time>{t("（北京时间）")}</p></div><div className="export-actions">{["md", "json", "pdf"].map(f => <a key={f} aria-label={t(`导出 ${f.toUpperCase()}`)} href={`/api/research/reports/${report.id}/export/${f}`}><Download size={13} />{t(f.toUpperCase())}</a>)}</div></div>
+    <ResearchScopeSummary scope={report.evidence.knowledge_scope}/>
     {candidateScope && <div className="report-candidate-action">
       <CandidateButton key={report.id} scope={{ ...candidateScope, origin: "report", report_id: report.id }} candidates={candidates} />
     </div>}

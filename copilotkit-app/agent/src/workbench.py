@@ -41,6 +41,8 @@ class Schedule(BriefOptions):
         if self.timing == "after_close" and self.offset_minutes < close_buffer_minutes(self.config.market):
             raise ValueError("收盘后至少等待 15 分钟，新加坡至少等待 20 分钟")
         if self.workflow != "stock":
+            if self.config.knowledge_collection_ids:
+                raise ValueError("Knowledge collections are currently supported on single-stock research tasks")
             self.symbols = self.universe(self.config)
             if self.workflow in ("watch", "filings", "weekly") and not self.symbols:
                 raise ValueError("请添加至少一个自选标的")
@@ -117,7 +119,7 @@ def translated(operation):
 
 @router.post("/tasks", status_code=202)
 def create_job(config: ResearchConfig):
-    return {"id": JobRepository().create_job(f"{config.symbol} 单股分析", config.model_dump(mode="json"))}
+    return translated(lambda:{"id": JobRepository().create_job(f"{config.symbol} 单股分析", config.model_dump(mode="json"))})
 
 
 @router.get("/tasks")

@@ -44,10 +44,12 @@ async def run_job(job_id, raw_config=None):
         from src.research_workflow import execute_research
         from src.scheduled_briefs import BriefOptions, execute_brief
         config = ResearchConfig.model_validate(payload)
+        if config.knowledge_collection_ids and not payload.get("_knowledge_snapshot"):
+            raise StateConflict("Research document versions were not pinned at submission")
         with execution_context(job_id, token), operation("research.run", kind="agent", run_id=job_id):
             if payload.get("_brief"):
                 return await execute_brief(config, BriefOptions.model_validate(payload["_brief"]), job_id)
-            return await execute_research(config, report_id=job_id)
+            return await execute_research(config, report_id=job_id, knowledge_snapshot=payload.get("_knowledge_snapshot"))
 
     async def heartbeat():
         while True:

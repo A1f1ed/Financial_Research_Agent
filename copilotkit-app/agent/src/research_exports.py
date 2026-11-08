@@ -47,7 +47,17 @@ def markdown(report):
         lines += [f"- 发布时间/交易日：{source.get('published_at') or '未知'}", f"- 链接：{source['url']}"]
         if source.get("filing_url"):
             lines.append(f"- 公告佐证：{source['filing_url']}")
+        if source.get("document_id"):
+            lines += [f"- 固定文档：{source['document_id']} · 文件 v{source['document_version']} · 元数据修订 {source['metadata_revision']} · PDF 第 {source['page_number']} 页",
+                f"- 原件 SHA256：{source['document_sha256']}",
+                f"- App 内原页：/evidence/{source['knowledge_search_id']}/{source['knowledge_citation_id']}"]
         lines += [source["content"], ""]
+    pinned=evidence.get("knowledge_scope")
+    if pinned:
+        lines += ["## 提交时固定的知识资料范围",f"- 固定时间：{pinned['pinned_at']}",
+            f"- 截止日/市场：{pinned['cutoff']['as_of']} / {pinned['cutoff']['market']}",
+            f"- 当时符合：{pinned['eligible_count']}；排除：{pinned['excluded_count']}",
+            *[f"- {item['title']} · v{item['version']} / metadata {item['metadata_revision']} · {item.get('exclusion') or 'eligible_at_submission'}" for item in pinned["documents"]],""]
     lines += ["## 数据限制", *[f"- {v}" for v in evidence.get("gaps", [])], "",
               evidence.get("methodology", ""), "", "## 方法与运行记录"]
     for stage in report["stages"]:

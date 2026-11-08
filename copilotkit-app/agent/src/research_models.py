@@ -5,6 +5,7 @@ import re
 from datetime import date, datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
+from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 ROLES = {
@@ -40,6 +41,13 @@ class ResearchConfig(BaseModel):
     question: str = Field(default="分析财务质量、增长驱动、估值依据、技术趋势与主要风险。", max_length=2000)
     benchmark: str = "2800.HK"
     peers: list[str] = Field(default_factory=lambda: ["175.HK", "2015.HK"], max_length=4)
+    knowledge_collection_ids: list[str] = Field(default_factory=list,max_length=8)
+    knowledge_search_mode: Literal["keyword","hybrid"] = "keyword"
+
+    @field_validator("knowledge_collection_ids")
+    @classmethod
+    def knowledge_ids(cls, values):
+        return list(dict.fromkeys(str(UUID(value)) for value in values))
 
     @model_validator(mode="after")
     def validate_config(self):

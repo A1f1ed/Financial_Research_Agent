@@ -52,6 +52,9 @@ class JobRepository:
     def enqueue(db, name, config, schedule_id=None, *, deduplication_key=None, kind="research"):
         if kind not in {"research", "document", "knowledge"}:
             raise ValueError("Unknown job kind")
+        if kind=="research":
+            from src.knowledge.research_scope import prepare_job_config
+            config=prepare_job_config(config,db)
         key = str(uuid4())
         now = datetime.now(UTC)
         db.add(Job(id=key, name=name, config=config, kind=kind, schedule_id=schedule_id, status="queued", created_at=now))
@@ -116,6 +119,7 @@ class JobRepository:
             return {"id": key, "name": job.name if job else f"{report['symbol']} 单股分析",
                     "status": job.status if job else report["status"], "error": job.error if job else None,
                     "config": payload, "workflow": (payload.get("_brief") or {}).get("workflow"),
+                    "knowledge_scope":payload.get("_knowledge_snapshot") or (report.get("evidence",{}).get("knowledge_scope") if report else None),
                     "report_id": report["id"] if report else None, "stages": report.get("stages", []) if report else [],
                     "elapsed_seconds": report.get("elapsed_seconds", 0) if report else 0,
                     "has_assessment": bool(report and report.get("assessment")),

@@ -278,7 +278,7 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
       timing: preset?.timing ?? "clock", offset_minutes: preset?.offset_minutes ?? 30,
       workflow, symbols: [], keyword: "", window_hours: preset?.repeat === "hourly" ? 1 : 24, move_threshold: 3,
       config: {
-        ...config, market,
+        ...config, market, knowledge_collection_ids: [],
         symbol: market === config.market ? config.symbol : BENCHMARK[market],
         benchmark: BENCHMARK[market], peers: market === config.market ? config.peers : [],
         question: config.question,
@@ -345,7 +345,7 @@ export function SchedulePanel({ config, onTask, historyId, setHistoryId, candida
     {draft && <form ref={form} className="finance-card workbench-form" onSubmit={save}>
       <h2>{t(editing ? "编辑定时任务" : "新建定时任务")}</h2>
       <label>{t("任务名称")}<input required maxLength={30} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} /></label>
-      <label>{t("业务类型")}<select value={draft.workflow} onChange={e => setDraft({ ...draft, workflow: e.target.value as Workflow, symbols: [], keyword: "" })}>
+      <label>{t("业务类型")}<select value={draft.workflow} onChange={e => setDraft({ ...draft, workflow: e.target.value as Workflow, symbols: [], keyword: "", config:{...draft.config,knowledge_collection_ids:[]} })}>
         {Object.entries(WORKFLOWS).map(([key, info]) => <option key={key} value={key}>{t(info[0])}</option>)}
       </select></label>
       <p className="field-note">{t(WORKFLOWS[draft.workflow][1])}</p>

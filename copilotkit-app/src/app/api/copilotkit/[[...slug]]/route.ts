@@ -6,6 +6,7 @@ import {
 } from "@copilotkit/runtime/v2";
 import { handle } from "hono/vercel";
 import { LangGraphHttpAgent } from "@copilotkit/runtime/langgraph";
+import {ResearchStreamMiddleware} from "@/lib/agent-stream";
 
 // FastAPI-specific: the agent runs under uvicorn + ag-ui-langgraph, which
 // speaks AG-UI directly. We talk to it via HttpAgent, not LangGraphAgent
@@ -25,6 +26,7 @@ const defaultAgent = new LangGraphHttpAgent({
     "http://localhost:8123"
   }/`,
 });
+defaultAgent.use(new ResearchStreamMiddleware());
 
 const runtime = new CopilotRuntime({
   agents: { default: defaultAgent },

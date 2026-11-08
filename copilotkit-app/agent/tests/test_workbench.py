@@ -1,4 +1,4 @@
-from postgres_fixture import postgres_fixture
+from tests.postgres_fixture import postgres_fixture
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -39,7 +39,8 @@ class WorkbenchTests(IsolatedAsyncioTestCase):
         both_started = asyncio.Event()
         started = set()
 
-        async def fake_research(config, *, report_id):
+        async def fake_research(config, *, report_id, knowledge_snapshot=None):
+            self.assertIsNone(knowledge_snapshot)
             started.add(report_id)
             if len(started) == 2:
                 both_started.set()

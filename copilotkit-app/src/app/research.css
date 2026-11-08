@@ -625,3 +625,7 @@ html[lang=en] .finance-example-cards strong{line-height:1.45}
 .knowledge-calculation-result summary{cursor:pointer;font-size:13px;margin-top:14px}
 .knowledge-calculation-input{padding-block:16px;border-bottom:1px solid var(--border)}
 .knowledge-selected-figure .knowledge-figure-sign{width:auto;min-width:120px;max-width:150px}
+
+.knowledge-research-snapshot{padding:16px 20px;border:1px solid var(--border);border-radius:14px;background:var(--finance-panel);margin:16px 0}.knowledge-research-snapshot summary{cursor:pointer;font-weight:600}.knowledge-research-snapshot li{margin:8px 0;overflow-wrap:anywhere}
+
+.document-dialog,.document-confirm-dialog{color-scheme:dark;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--foreground) 26%,var(--finance-panel)) transparent}.light .document-dialog,.light .document-confirm-dialog{color-scheme:light}:is(.document-dialog,.document-confirm-dialog) *{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--foreground) 26%,var(--finance-panel)) transparent}

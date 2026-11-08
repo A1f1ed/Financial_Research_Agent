@@ -5,9 +5,11 @@ import {
   type BaseEvent,
   type RunAgentInput,
   type RunStartedEvent,
+  type MessagesSnapshotEvent,
 } from "@copilotkit/react-core/v2";
 import { from, lastValueFrom, reduce } from "rxjs";
 import type { Report } from "@/lib/research";
+import {orderMessageSnapshot} from "@/lib/message-snapshot";
 
 export async function readResearchHistory(threadId: string, signal: AbortSignal, allowMissing = false) {
   const started = performance.now();
@@ -45,6 +47,7 @@ async function restoreHistory(threadId: string, signal: AbortSignal, allowMissin
   const history = await lastValueFrom(
     defaultApplyEvents(input, from(events.filter(event => event.type !== EventType.RAW)), replay, [{
       onEvent: ({ event, messages }) => {
+        if(event.type===EventType.MESSAGES_SNAPSHOT)return {messages:orderMessageSnapshot(messages,(event as MessagesSnapshotEvent).messages)};
         if (event.type !== EventType.RUN_STARTED) return;
         const submitted = (event as RunStartedEvent).input?.messages ?? [];
         const knownIds = new Set(messages.map(message => message.id));

@@ -56,7 +56,15 @@ In a collection, search evidence and choose **Review numeric input**. Inspect th
 
 Fixed-scope native document chats can list reviewed inputs, read bounded source context and call the same calculator. Label mismatch can return bounded recent inputs within the same approved document versions; this does not broaden scope. Missing reviewed inputs require review instead of model arithmetic. Retrieval service failure is persisted separately from a successful search with insufficient evidence.
 
-Routes under `/research/knowledge/collections/{id}`: `GET figure-context/{search_id}/{K-id}`, `GET/POST figures`, `POST figures/{figure_id}/archive|restore`, and `GET/POST calculations`. The Next.js proxy explicitly permits only these route shapes. This feature does not yet establish complete research-task integration; see the current validation record.
+Routes under `/research/knowledge/collections/{id}`: `GET figure-context/{search_id}/{K-id}`, `GET/POST figures`, `POST figures/{figure_id}/archive|restore`, and `GET/POST calculations`. The Next.js proxy explicitly permits only these route shapes. See the current validation record for observed acceptance and remaining gates.
+
+## Bind documents to single-stock research
+
+Open **Single-stock research → New task → Research documents**. Choose up to eight collections and keyword/hybrid retrieval. Submit explicitly using **Start research**. A new schedule starts with no inherited document selection; non-stock brief workflows currently reject attached collections instead of silently interpreting them as single-stock research.
+
+The server pins at most 50 exact file versions, metadata revisions, hashes and the strict market cutoff in the same PostgreSQL transaction as the job/outbox. Client-provided internal snapshots are discarded. The worker receives that snapshot; later collection additions cannot enter the run. Source archive/removal or changed metadata is checked again before retaining an excerpt and appears as a gap. Collection membership removal after submission does not silently replace the originally selected file version.
+
+The task and report show **Pinned research documents**, including submission-time eligibility/exclusions. A separate document stage adds original-page excerpts to the existing S-numbered report evidence. The analyst keeps original units and does not perform unsupported arithmetic from excerpts. **Sources & evidence → Open retained original page** opens the saved PDF page/version. Report Q&A reads this report's scope and source list. Markdown/PDF exports retain original URLs, page/version/hash metadata and the pinned scope; JSON retains the complete saved report. Search failure is distinguished from insufficient evidence, and market research can finish with an explicit partial document stage.
 
 ## Network configuration
 
