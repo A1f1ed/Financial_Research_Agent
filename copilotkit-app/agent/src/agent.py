@@ -17,6 +17,7 @@ from src.research_workflow import run_financial_research, read_current_research
 from src.knowledge.tools import search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures
 from src.knowledge.conversations import ConversationRepository
 from src.graphs.tools import find_research_graph_entities,read_research_graph_paths
+from src.evaluations.tools import evaluation_tools
 from src.knowledge.agent_scope import runtime_thread, scoped_request, validate_response, DOCUMENT_TOOLS
 from langchain_core.messages import ToolMessage
 
@@ -45,7 +46,7 @@ def report_attachment_text(message):
     return message.model_copy(update={"content": blocks})
 
 
-def build_graph(checkpointer):
+def build_graph(checkpointer, *, evaluation_model=None, evaluation_middleware=None):
     @wrap_model_call
     async def current_model(request, handler):
         key = runtime_thread(request)
@@ -56,7 +57,7 @@ def build_graph(checkpointer):
             request = request.override(tools=[
                 tool for tool in request.tools if getattr(tool, "name", None) == "read_current_research"
             ], messages=[report_attachment_text(message) for message in request.messages])
-        if read_setting("ai"):
+        if evaluation_model is None and read_setting("ai"):
             request = request.override(model=create_chat_model(
                 "openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False},
             ))
@@ -71,11 +72,11 @@ def build_graph(checkpointer):
         return await handler(request)
 
     return create_agent(
-        model=create_chat_model("openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False}),
-        tools=[run_financial_research, read_current_research, search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures, find_research_graph_entities, read_research_graph_paths, query_data, *todo_tools, generate_a2ui, search_flights],
-        middleware=[CopilotKitMiddleware(), current_model, scoped_tools,
+        model=evaluation_model if evaluation_model is not None else create_chat_model("openai:qwen3.8-max", model_kwargs={"parallel_tool_calls": False}),
+        tools=[run_financial_research, read_current_research, search_research_documents, read_research_document_context, list_reviewed_research_figures, calculate_reviewed_research_figures, find_research_graph_entities, read_research_graph_paths, *evaluation_tools, query_data, *todo_tools, generate_a2ui, search_flights],
+        middleware=[CopilotKitMiddleware(), current_model, *([evaluation_middleware] if evaluation_middleware is not None else []), scoped_tools,
             StateStreamingMiddleware(StateItem(state_key="todos", tool="manage_todos", tool_argument="todos")),
-            *([skills] if skills is not None else [])],
+            *([skills] if skills is not None and evaluation_model is None else [])],
         state_schema=AgentState,
         checkpointer=checkpointer,
         system_prompt="""
@@ -87,6 +88,7 @@ def build_graph(checkpointer):
 报告完成后简要总结结论、证据缺口并提醒已保存；追问已有报告时先调用read_current_research。
 共享状态包含 research_qa_report_id 时，当前是报告专属问答。先用 read_current_research 读取该报告。用户附件只用于补充或核对，要与报告证据区分，不给附件编造报告引用。不要调用其他工具或发起新研究。
 用户仅追问/解释概念时不要重新运行完整研究。
+评测只使用评测工具返回的真实版本、运行、指标和失败信息。用户明确要求启动评测时，先列出版本，再调用前端 startEvaluationRun 等待人工核对分区及预算；未经确认不能启动。冻结验收答案不得用于调参，不能通过其他工具绕过评测工具的冻结答案隔离。不编造评测分数。
 永远区分事实、计算与判断，不编造数据、模型准确率、目标价、交易指令或思考过程。
 研究结论引用已有来源[S编号]。任何数据缺失都必须保留。不能下单或访问交易账户。
 风险开关关闭只是未执行独立风险审查，不代表没有风险。

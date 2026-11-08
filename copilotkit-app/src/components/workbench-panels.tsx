@@ -25,7 +25,7 @@ type ScheduleDraft = {
 };
 type Schedule = ScheduleDraft & { id: string; next_run: string | null };
 type Task = {
-  id: string; name: string; symbol: string; kind: "manual" | "scheduled" | "document" | "knowledge";
+  id: string; name: string; symbol: string; kind: "manual" | "scheduled" | "document" | "knowledge" | "evaluation";
   status: string; created_at: string; error?: string; report_id?: string; managed?: boolean;
   trigger?: "manual" | "clock"; summary?: string;
 };
@@ -503,7 +503,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
       <div className="workbench-item-head task-filter-head"><h2>{t("执行记录")}</h2>
         <div className="task-filters">
         <select aria-label={t("筛选任务类型")} value={kind} disabled={deletion.busy} onChange={e => { deletion.reset(); setKind(e.target.value); }}>
-          <option value="all">{t("全部类型")}</option><option value="manual">{t("单股分析")}</option><option value="scheduled">{t("定时执行")}</option><option value="document">{t("资料处理")}</option><option value="knowledge">{t("知识任务")}</option>
+          <option value="all">{t("全部类型")}</option><option value="manual">{t("单股分析")}</option><option value="scheduled">{t("定时执行")}</option><option value="document">{t("资料处理")}</option><option value="knowledge">{t("知识任务")}</option><option value="evaluation">{t("评测任务")}</option>
         </select>
         <select aria-label={t("筛选任务状态")} value={filter} disabled={deletion.busy} onChange={e => { deletion.reset(); setFilter(e.target.value); }}>
           <option value="all">{t("全部状态")}</option>{Object.entries(statusLabels).filter(([key]) => key !== "pending").map(([key, label]) => <option key={key} value={key}>{t(label)}</option>)}
@@ -513,7 +513,7 @@ export function TaskPanel({ onReport, onTask, onSchedules }: {
         <input type="checkbox" aria-label={t(`选择 ${task.name} · ${displayTime(task.created_at)}`)}
           disabled={deletion.busy || !canDeleteTask(task.status)}
           checked={deletion.selected.includes(`tasks/${task.id}`)} onChange={() => deletion.toggle(`tasks/${task.id}`)} />
-        <div><strong>{t(task.name)}</strong><small>{t(task.kind === "knowledge" ? "知识任务" : task.kind === "document" ? "资料处理" : task.kind === "scheduled" ? "定时执行" : "单股分析")} · {t(displayTime(task.created_at))}</small>{task.error && <p className="muted">{t(task.error)}</p>}</div>
+        <div><strong>{t(task.name)}</strong><small>{t(task.kind === "evaluation" ? "评测任务" : task.kind === "knowledge" ? "知识任务" : task.kind === "document" ? "资料处理" : task.kind === "scheduled" ? "定时执行" : "单股分析")} · {t(displayTime(task.created_at))}</small>{task.error && <p className="muted">{t(task.error)}</p>}</div>
         <span className={`status-badge ${task.status}`}>{t(statusLabels[task.status] ?? task.status)}</span>
         <button className="chat-config-toggle" onClick={() => onTask(task.id)}>{t("查看任务")}</button>
         {task.report_id && <button className="chat-config-toggle" onClick={() => onReport(task.report_id!)}>{t("查看报告")}<ArrowUpRight size={14} /></button>}

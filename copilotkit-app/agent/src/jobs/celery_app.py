@@ -15,6 +15,7 @@ app.conf.update(
     broker_connection_timeout=5, broker_connection_retry_on_startup=True, task_publish_retry=False,
     broker_transport_options={"confirm_publish": True}, timezone="UTC", enable_utc=True,
     task_routes={"aperture.research": {"queue": "research"}, "aperture.schedule": {"queue": "maintenance"},
+                 "aperture.evaluation": {"queue": "evaluation"},
                  "aperture.document": {"queue": "documents"},
                  "aperture.knowledge": {"queue": "knowledge"},
                  "aperture.checks": {"queue": "maintenance"}, "aperture.heartbeat": {"queue": "maintenance"}},

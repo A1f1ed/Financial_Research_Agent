@@ -718,5 +718,9 @@
   "响应耗时": "Response time",
   "测试中…": "Testing…",
   "测试连接": "Test connection",
-  "保存并启用": "Save & activate"
+  "保存并启用": "Save & activate",
+  "评测中心": "Evaluation center",
+  "评测任务": "Evaluation task",
+  "查看评测结果": "Open evaluation results",
+  "评测案例": "Evaluation cases"
 }

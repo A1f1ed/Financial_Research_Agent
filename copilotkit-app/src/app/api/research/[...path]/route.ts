@@ -4,10 +4,11 @@ import { NextRequest } from "next/server";
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const { path } = await context.params;
   const route = path.join("/");
+  const evaluationRoute = /^evaluations\/(?:datasets(?:\/import|\/[a-f0-9-]+(?:\/(?:publish|archive|restore|export))?)?|versions\/[a-f0-9-]+|runs(?:\/[a-f0-9-]+(?:\/(?:cancel|retry|export|attempts\/[a-f0-9-]+))?)?|compare)$/.test(route);
   const knowledgeRoute = /^knowledge\/(?:collections(?:\/[a-f0-9-]+(?:\/(?:members|archive|restore|history|calculations|figures(?:\/[a-f0-9-]+\/(?:archive|restore))?|figure-context\/[a-f0-9-]+\/K[1-9][0-9]*))?)?|conversations(?:\/[a-f0-9-]+)?|scope|embedding(?:\/test)?|indices|search|searches\/[a-f0-9-]+)$/.test(route);
   const graphRoute = /^graphs(?:\/[a-f0-9-]+(?:\/(?:archive|restore|history|sync|extractions(?:\/(?:preview|[a-f0-9-]+))?|extracted-candidates(?:\/[a-f0-9-]+(?:\/(?:resolve|reject))?)?|query|queries(?:\/[a-f0-9-]+)?|entities(?:\/[a-f0-9-]+(?:\/(?:archive|restore))?)?|relations(?:\/[a-f0-9-]+(?:\/review)?)?))?)?$/.test(route);
   if (!/^(documents(?:\/(?:upload|import|options|imports\/[a-f0-9-]+\/retry|[a-f0-9-]+(?:\/(?:archive|restore|retry|history|download|(?:pages|preview)\/[0-9]+))?))?|reports(?:\/[a-f0-9-]+(?:\/export\/(?:md|json|pdf))?)?|report-comparisons|status|market-review|market-sentiment|market-follow-through|market-industry-history|a-share-events|review-candidates(?:\/[0-9]{6}\.(?:SH|SZ))?|review-checks(?:\/[a-f0-9-]+(?:\/verify)?)?|followups|tasks(?:\/[a-f0-9-]+(?:\/cancel)?)?|schedules(?:\/[a-f0-9-]+(?:\/(?:run|history))?)?|settings(?:\/(?:ai(?:\/test)?|data))?)$/.test(route)) {
-    if (!knowledgeRoute && !graphRoute) return Response.json({ error: "Unknown research endpoint" }, { status: 404 });
+    if (!knowledgeRoute && !graphRoute && !evaluationRoute) return Response.json({ error: "Unknown research endpoint" }, { status: 404 });
   }
   const hasBody = request.method === "POST" || request.method === "PUT";
   const upload = route === "documents/upload" && request.method === "POST";

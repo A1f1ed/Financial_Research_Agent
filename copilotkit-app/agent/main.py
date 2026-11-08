@@ -69,6 +69,8 @@ from src.documents.api import router as documents_router, UploadBodyLimit
 from src.knowledge.api import router as knowledge_router
 from src.graphs.api import router as graphs_router
 app.add_middleware(UploadBodyLimit)
+from src.evaluations.api import router as evaluations_router
+app.include_router(evaluations_router)
 app.include_router(documents_router)
 app.include_router(knowledge_router)
 app.include_router(graphs_router)

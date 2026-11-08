@@ -123,7 +123,7 @@ def create_job(config: ResearchConfig):
 
 
 @router.get("/tasks")
-def tasks(schedule_id: str | None = None, kind: Literal["manual", "scheduled", "document", "knowledge"] | None = None,
+def tasks(schedule_id: str | None = None, kind: Literal["manual", "scheduled", "document", "knowledge", "evaluation"] | None = None,
           limit: Annotated[int | None, Query(ge=1, le=100)] = None):
     return {"tasks": JobRepository().list_tasks(schedule_id, kind, limit)}
 

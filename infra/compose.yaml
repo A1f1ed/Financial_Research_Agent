@@ -89,6 +89,15 @@ services:
     mem_limit: 1536m
     cpus: 2
 
+  evaluation-worker:
+    <<: *agent
+    environment:
+      <<: *agent-environment
+      APERTURE_EVALUATION_API_URL: http://api:8123
+    command: [celery, -A, 'src.jobs.celery_app:app', worker, --queues=evaluation, --concurrency=2, '--hostname=evaluation@%h', --loglevel=WARNING]
+    mem_limit: 1536m
+    cpus: 2
+
   beat:
     <<: *agent
     command: [celery, -A, 'src.jobs.celery_app:app', beat, --schedule=/home/aperture/celerybeat-schedule, --loglevel=WARNING]

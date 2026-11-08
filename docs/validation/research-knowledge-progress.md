@@ -4,6 +4,8 @@ Baseline: [PRD v1.5](../PRD-research-knowledge.md), retaining the complete in-ap
 
 ## Latest — 2026-11-08 checkpoint 2 accepted locally
 
+**Checkpoint 3 early review, 2026-11-08:** online evaluation datasets/immutable versions, dedicated background runs, real result/compare/export pages and guarded Agent wiring are implemented. Real new-upload retrieval, graph and reviewed-calculation runs passed after fixing a date-persistence defect. Latest focused suite 15 passed; full suites 96 integration / 88 domain passed before the final two added regression cases. Worker-loss/cancellation tests preserved completed results and explicitly counted unknown/cancelled attempts. The user requested an early feature-branch snapshot; [acceptance evidence and outstanding checks](checkpoint-3-evaluations.md) distinguish implemented behavior from unfinished live Agent/UI acceptance. Checkpoint 3 is not declared complete; checkpoint 4 remains gated.
+
 The approved RAG/GraphRAG functional checkpoint is complete; see the [consolidated acceptance record](checkpoint-2-rag-graph.md) for actual paths, IDs, failures/fixes, limits and verification. Earlier “pending” entries below are historical, not the current checkpoint status. **Checkpoint 3 is not authorized and no PR/main merge has begun.**
 
 - Real fresh-document extraction → explicit identity review → accepted relations → worker/Neo4j publication → interactive paths → original page is accepted, including two separate policy stages and read-only native graph conversation tools. Final production graph run has `RUN_FINISHED`; November 1 applicability returns both distinct announcement paths.

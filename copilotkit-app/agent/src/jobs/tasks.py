@@ -32,6 +32,11 @@ def research(self, job_id):
     return execute_job(self, job_id)
 
 
+@app.task(name="aperture.evaluation", bind=True, max_retries=20)
+def evaluation(self, job_id):
+    return execute_job(self, job_id)
+
+
 @app.task(name="aperture.document", bind=True, max_retries=20)
 def document(self, job_id):
     return execute_job(self, job_id)

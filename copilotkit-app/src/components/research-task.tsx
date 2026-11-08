@@ -42,7 +42,7 @@ function estimateRemaining(task: Progress) {
   return remaining < 60 ? `约 ${Math.max(10, Math.ceil(remaining / 10) * 10)} 秒` : `约 ${Math.ceil(remaining / 60)} 分钟`;
 }
 
-export function ResearchTask({ id, onReport, onDocument, onRetry }: { id: string; onReport: (id: string) => void; onDocument?: (id: string) => void; onRetry?: (id: string) => void }) {
+export function ResearchTask({ id, onReport, onDocument, onRetry, onEvaluation }: { id: string; onReport: (id: string) => void; onDocument?: (id: string) => void; onRetry?: (id: string) => void; onEvaluation?: (id:string)=>void }) {
   const t = useT();
   const [task, setTask] = useState<Progress | null>(null);
   const [error, setError] = useState("");
@@ -87,16 +87,16 @@ export function ResearchTask({ id, onReport, onDocument, onRetry }: { id: string
   }
 
   const finished = task ? terminal.has(task.status) : false;
-  const materialTask = task?.kind === "document" || task?.kind === "knowledge";
+  const materialTask = task?.kind === "document" || task?.kind === "knowledge" || task?.kind === "evaluation";
   const completed = task?.stages.filter(stage => stage.status === "complete" || stage.status === "failed").length ?? 0;
   return <section ref={panel} className="finance-card task-progress" aria-label={t("当前研究进度")}>
     <div className="workbench-item-head">
-      <div><span className="section-eyebrow">{t(task?.kind === "knowledge" ? "知识任务" : task?.kind === "document" ? "资料处理" : "当前研究")}</span><h2>{t(task?.name ?? "正在读取任务…")}</h2></div>
+      <div><span className="section-eyebrow">{t(task?.kind === "evaluation" ? "评测任务" : task?.kind === "knowledge" ? "知识任务" : task?.kind === "document" ? "资料处理" : "当前研究")}</span><h2>{t(task?.name ?? "正在读取任务…")}</h2></div>
       {task && <span className={`status-badge ${task.status}`}>{t(task.status === "queued" ? "排队中" : STATUS_NAMES[task.status] ?? task.status)}</span>}
     </div>
     {error && <p role="alert">{t(error)}</p>}
     {task && <>
-      {materialTask ? <p className="muted">{t(task.kind === "knowledge" ? "知识任务" : "资料处理")} · {t("已用时间")}: {Math.round(task.elapsed_seconds)} {t("秒")}</p>
+      {materialTask ? <p className="muted">{t(task.kind === "evaluation" ? "评测任务" : task.kind === "knowledge" ? "知识任务" : "资料处理")} · {t("已用时间")}: {Math.round(task.elapsed_seconds)} {t("秒")}</p>
         : <p className="muted">{t(task.workflow ? task.config.market : task.config.symbol)}{t("· 截至")}{t(task.config.as_of)}</p>}
       {task.status === "queued" && <p role="status"><Clock3 size={15} />{t(materialTask ? "正在等待资料处理服务，运行后显示实际阶段。" : "正在排队，进入运行后显示预计时间。")}</p>}
       <ResearchScopeSummary scope={task.knowledge_scope}/>
@@ -108,7 +108,7 @@ export function ResearchTask({ id, onReport, onDocument, onRetry }: { id: string
         {task.stages.map(stage => <li key={stage.id} data-status={stage.status}>
           <details>
             <summary>{t(stage.status === "complete" ? <Check size={15} /> : stage.status === "running" ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />)}
-              <span>{t(({ download: "下载原文", integrity: "校验原文", extract: "提取页面", chunk: "资料切片", embedding: "生成语义向量", index: "发布索引", projection: "图谱投影", extraction: "抽取关系提议" } as Record<string, string>)[stage.id] ?? STAGE_NAMES[stage.id] ?? stage.id)}</span><small>{t(STATUS_NAMES[stage.status] ?? stage.status)}</small>
+              <span>{t(({ download: "下载原文", integrity: "校验原文", extract: "提取页面", chunk: "资料切片", embedding: "生成语义向量", index: "发布索引", projection: "图谱投影", extraction: "抽取关系提议", evaluation: "评测案例" } as Record<string, string>)[stage.id] ?? STAGE_NAMES[stage.id] ?? stage.id)}</span><small>{t(STATUS_NAMES[stage.status] ?? stage.status)}</small>
             </summary>
             <p>{t(stage.detail || STATUS_NAMES[stage.status])}</p>
           </details>
@@ -119,6 +119,7 @@ export function ResearchTask({ id, onReport, onDocument, onRetry }: { id: string
       <div className="workbench-actions">
         {task.kind === "document" && !task.document_id && ["failed", "cancelled"].includes(task.status) && onRetry && <button className="primary-button" disabled={cancelling} onClick={() => void retryImport()}>{t("重试官方导入")}</button>}
         {task.document_id && onDocument && <button className="chat-config-toggle" onClick={() => onDocument(task.document_id!)}>{t("打开研究资料")}<ArrowUpRight size={15} /></button>}
+        {task.kind === "evaluation" && onEvaluation && <button className="primary-button" onClick={()=>onEvaluation(id)}>{t("查看评测结果")}<ArrowUpRight size={15}/></button>}
         {!finished && <button className="chat-config-toggle danger-button" disabled={cancelling} onClick={() => void cancel()}>{t(cancelling ? "正在停止…" : "停止任务")}</button>}
       </div>
       {task.report_id && <div className="workbench-actions">

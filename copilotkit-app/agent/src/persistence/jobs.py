@@ -28,7 +28,7 @@ def iso(value):
 def fail_execution(db, job, error):
     """Keep an interrupted report's evidence but end its visible progress state."""
     job.status, job.error = "failed", error
-    if job.kind in {"document", "knowledge"}:
+    if job.kind in {"document", "knowledge", "evaluation"}:
         document = db.get(Document, job.config.get("document_id")) if job.config.get("document_id") else None
         if job.kind == "document" and document and document.active_job_id == job.id:
             document.status = "failed"
@@ -50,7 +50,7 @@ class JobRepository:
 
     @staticmethod
     def enqueue(db, name, config, schedule_id=None, *, deduplication_key=None, kind="research"):
-        if kind not in {"research", "document", "knowledge"}:
+        if kind not in {"research", "document", "knowledge", "evaluation"}:
             raise ValueError("Unknown job kind")
         if kind=="research":
             from src.knowledge.research_scope import prepare_job_config
@@ -58,7 +58,7 @@ class JobRepository:
         key = str(uuid4())
         now = datetime.now(UTC)
         db.add(Job(id=key, name=name, config=config, kind=kind, schedule_id=schedule_id, status="queued", created_at=now))
-        db.add(Outbox(id=str(uuid4()), topic="knowledge.execute" if kind == "knowledge" else "document.execute" if kind == "document" else "research.execute", aggregate_id=key, payload={"job_id": key},
+        db.add(Outbox(id=str(uuid4()), topic="evaluation.execute" if kind == "evaluation" else "knowledge.execute" if kind == "knowledge" else "document.execute" if kind == "document" else "research.execute", aggregate_id=key, payload={"job_id": key},
                       deduplication_key=deduplication_key or f"research.execute:{key}"))
         db.flush()
         return key
@@ -70,7 +70,7 @@ class JobRepository:
     def list_tasks(self, schedule_id=None, kind=None, limit=None):
         if limit is not None and (isinstance(limit, bool) or not 1 <= limit <= 100):
             raise ValueError("Task limit must be between 1 and 100")
-        if kind not in (None, "manual", "scheduled", "document", "knowledge"):
+        if kind not in (None, "manual", "scheduled", "document", "knowledge", "evaluation"):
             raise ValueError("Unknown task kind")
         with transaction(self.bind) as db:
             query = select(Job, Report.id.label("report_id"), Report.body["assessment"]["summary"].astext.label("summary")).outerjoin(
@@ -80,14 +80,14 @@ class JobRepository:
             else:
                 query = query.where(~exists(select(HiddenTask.id).where(HiddenTask.id == Job.id)))
             if kind:
-                if kind in {"document", "knowledge"}:
+                if kind in {"document", "knowledge", "evaluation"}:
                     query = query.where(Job.kind == kind)
                 else:
                     query = query.where(Job.kind == "research", Job.schedule_id.is_(None) if kind == "manual" else Job.schedule_id.is_not(None))
             query = query.order_by(Job.created_at.desc(), Job.record_order.desc())
             if limit is not None:
                 query = query.limit(limit)
-            result = [{"id": job.id, "name": job.name, "symbol": job.config.get("symbol", ""), "kind": job.kind if job.kind in {"document", "knowledge"} else "scheduled" if job.schedule_id else "manual",
+            result = [{"id": job.id, "name": job.name, "symbol": job.config.get("symbol", ""), "kind": job.kind if job.kind in {"document", "knowledge", "evaluation"} else "scheduled" if job.schedule_id else "manual",
                        "document_id": job.result.get("document_id") or job.config.get("document_id"),
                        "schedule_id": job.schedule_id, "trigger": job.config.get("_trigger"), "managed": True, "summary": summary,
                        "status": job.status, "created_at": iso(job.created_at), "error": job.error, "report_id": report_id}
@@ -111,7 +111,7 @@ class JobRepository:
             if job is None and report is None:
                 raise MissingRecord("Task does not exist")
             payload = job.config if job is not None else report["config"]
-            if job is not None and job.kind in {"document", "knowledge"}:
+            if job is not None and job.kind in {"document", "knowledge", "evaluation"}:
                 return {"id": key, "name": job.name, "kind": job.kind, "status": job.status, "error": job.error,
                         "document_id": job.result.get("document_id") or job.config.get("document_id"), "config": {},
                         "result": job.result, "stages": job.progress, "elapsed_seconds": job.elapsed_seconds,
@@ -241,7 +241,7 @@ class JobRepository:
                         if stage.get("status") == "running":
                             stage["status"] = "cancelled"
                     report.body = body
-                if job.kind in {"document", "knowledge"}:
+                if job.kind in {"document", "knowledge", "evaluation"}:
                     document = db.get(Document, job.config.get("document_id")) if job.config.get("document_id") else None
                     if job.kind == "document" and document and document.active_job_id == key:
                         document.status = "cancelled"

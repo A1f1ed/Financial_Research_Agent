@@ -368,6 +368,51 @@ class GraphExtractionCandidate(Ordered, Base):
     __table_args__ = (UniqueConstraint("graph_id", "fingerprint", name="uq_graph_candidate_fingerprint"),)
 
 
+class EvaluationDataset(Ordered, Base):
+    __tablename__ = "evaluation_datasets"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, default=1)
+    body: Mapped[dict] = mapped_column(JSONB)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvaluationVersion(Ordered, Base):
+    __tablename__ = "evaluation_versions"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("research.evaluation_datasets.id"), index=True)
+    number: Mapped[int] = mapped_column(Integer)
+    body: Mapped[dict] = mapped_column(JSONB)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (UniqueConstraint("dataset_id", "number", name="uq_evaluation_version_number"),)
+
+
+class EvaluationRun(Ordered, Base):
+    __tablename__ = "evaluation_runs"
+    id: Mapped[str] = mapped_column(ForeignKey("research.jobs.id"), primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("research.evaluation_datasets.id"), index=True)
+    version_id: Mapped[str] = mapped_column(ForeignKey("research.evaluation_versions.id"), index=True)
+    parent_run_id: Mapped[str | None] = mapped_column(ForeignKey("research.evaluation_runs.id"))
+    config: Mapped[dict] = mapped_column(JSONB)
+    manifest: Mapped[dict] = mapped_column(JSONB)
+    counters: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvaluationAttempt(Ordered, Base):
+    __tablename__ = "evaluation_attempts"
+    id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("research.evaluation_runs.id"), index=True)
+    case_id: Mapped[str] = mapped_column(String(80))
+    repetition: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    result: Mapped[dict] = mapped_column(JSONB, default=dict)
+    requested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (UniqueConstraint("run_id", "case_id", "repetition", name="uq_evaluation_attempt_position"),)
+
+
 class Followup(Base):
     __tablename__ = "followups"
     thread_id: Mapped[str] = mapped_column(String(160), primary_key=True)

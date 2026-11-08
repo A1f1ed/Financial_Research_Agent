@@ -20,6 +20,8 @@ import { KnowledgeWorkspace } from "@/components/knowledge/workspace";
 import { ResearchKnowledgeSelection } from "@/components/knowledge/research-selection";
 import { ResearchScopeSummary } from "@/components/knowledge/research-scope-summary";
 import { GraphWorkspace } from "@/components/graphs/workspace";
+import { EvaluationWorkspace } from "@/components/evaluations/workspace";
+import { EvaluationStartCard } from "@/components/evaluations/agent-start";
 import { KnowledgeChatScope, type CitationSelection } from "@/components/knowledge/chat-scope";
 import { KnowledgeCitationViewer } from "@/components/knowledge/citation-viewer";
 import { ReportComparison } from "@/components/report-comparison";
@@ -31,7 +33,7 @@ import { useGenerativeUIExamples } from "@/hooks";
 import { useTheme } from "@/hooks/use-theme";
 import { ANALYSTS, DEFAULT_CONFIG, formatReportTime, ResearchConfig, Report, ReportSummary, STAGE_NAMES, STATUS_NAMES } from "@/lib/research";
 
-type Tab = "free" | "config" | "review" | "report" | "sources" | "library" | "documents" | "knowledge" | "graphs" | "graph-view" | "comparison" | "schedules" | "tasks" | "execution" | "data" | "ai";
+type Tab = "free" | "config" | "review" | "report" | "sources" | "library" | "documents" | "knowledge" | "graphs" | "graph-view" | "evaluation" | "comparison" | "schedules" | "tasks" | "execution" | "data" | "ai";
 type RecentTask = { id: string; symbol: string; status: string; created_at: string; kind: string };
 const safeUrl = (value: string) => /^https?:\/\//i.test(value) ? value : "#";
 const mainlandCode = /^[0-9]{6}\.(SH|SZ)$/;
@@ -76,6 +78,8 @@ export function ResearchWorkspace() {
   const [config, setConfig] = useState<ResearchConfig>(DEFAULT_CONFIG);
   const aShare = canPreviewAEvents(config.symbol, config.market);
   const [tab, setTab] = useState<Tab>("config");
+  const [evaluationRunId,setEvaluationRunId]=useState<string|null>(null);
+  useEffect(()=>{const id=new URLSearchParams(window.location.search).get("evaluationRun");if(id&&/^[a-f0-9-]{36}$/.test(id)){setEvaluationRunId(id);setTab("evaluation");}},[]);
   const candidates = useReviewCandidates(tab === "review" || tab === "report" || tab === "schedules");
   const [error, setError] = useState("");
   const library = useResearchList<ReportSummary>(tab === "library" ? "reports" : null, "reports");
@@ -200,6 +204,7 @@ export function ResearchWorkspace() {
     parameters: z.object({ proposal: z.string() }), render: ({ args, respond, status }) =>
       <div className="scope-card"><ShieldCheck size={20} /><strong>{t("确认研究范围")}</strong><p>{t(args.proposal)}</p>
         {status === "executing" ? <div className="button-row"><button onClick={() => respond?.("用户同意此研究范围")}>{t("同意")}</button><button onClick={() => respond?.("用户拒绝变更，请保留原范围")}>{t("保留原范围")}</button></div> : <small>{t(status === "complete" ? "已收到用户决定" : "正在准备确认…")}</small>}</div> });
+  useHumanInTheLoop({name:"startEvaluationRun",description:"Only after the user explicitly requests an evaluation run: show the actual published version for human review of partition, model permission and budget. The user starts the run; never auto-approve.",parameters:z.object({version_id:z.string().uuid()}),render:({args,respond,status})=><EvaluationStartCard versionId={args.version_id} respond={respond} status={status} onOpen={id=>{setEvaluationRunId(id);setTab("evaluation");}}/>});
 
   async function startResearch(event?: React.FormEvent) {
     event?.preventDefault(); setError("");
@@ -298,6 +303,7 @@ export function ResearchWorkspace() {
         <button aria-current={tab === "graphs" ? "page" : undefined} onClick={() => setTab("graphs")}>{t("图谱管理")}</button>
         <button aria-current={tab === "graph-view" ? "page" : undefined} onClick={() => setTab("graph-view")}>{t("关系图与路径")}</button>
       </details>
+      <button aria-current={tab === "evaluation" ? "page" : undefined} onClick={() => {setEvaluationRunId(null);setTab("evaluation");}}><FlaskConical size={17} />{t("评测中心")}</button>
       <button aria-current={tab === "tasks" ? "page" : undefined} onClick={() => setTab("tasks")}><ClipboardList size={17} />{t("任务中心")}</button>
       <details className="workbench-nav-group">
         <summary><Settings2 size={17} />{t("个人设置")}<ChevronDown size={13} /></summary>
@@ -420,9 +426,10 @@ export function ResearchWorkspace() {
             {tab === "execution" && execution && <div className="workbench-page">
               <button className="chat-config-toggle" onClick={() => setTab(execution.from)}>{t("返回")} · {t(execution.from === "schedules" ? "定时任务" : execution.from === "documents" ? "研究资料" : execution.from === "knowledge" ? "知识库" : execution.from === "graphs" ? "图谱管理" : "任务中心")}</button>
               <h1>{t("执行详情")}</h1>
-              <ResearchTask key={execution.id} id={execution.id} onReport={loadReport} onDocument={id => { setDocumentId(id); setTab("documents"); }} onRetry={id => setExecution({ ...execution, id })} />
+              <ResearchTask key={execution.id} id={execution.id} onReport={loadReport} onDocument={id => { setDocumentId(id); setTab("documents"); }} onRetry={id => setExecution({ ...execution, id })} onEvaluation={id=>{setEvaluationRunId(id);setTab("evaluation");}}/>
             </div>}
             {(tab === "graphs" || tab === "graph-view") && <GraphWorkspace mode={tab === "graphs" ? "manage" : "view"} onMode={mode => setTab(mode === "manage" ? "graphs" : "graph-view")} selectedId={graphId} onSelect={setGraphId} onTask={id => { setExecution({id,from:"graphs"}); setTab("execution"); }} />}
+            {tab === "evaluation" && <EvaluationWorkspace initialRunId={evaluationRunId} onTask={id=>{setExecution({id,from:"tasks"});setTab("execution");}}/>}
             {(tab === "data" || tab === "ai") && <SettingsPanel section={tab} />}
 
 

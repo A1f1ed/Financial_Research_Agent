@@ -56,7 +56,7 @@ def recover(*, bind=None, now=None, max_recoveries=3):
                 continue
             job.recovery_attempts += 1
             job.status = "queued"
-            db.add(Outbox(id=str(uuid4()), topic="knowledge.execute" if job.kind == "knowledge" else "document.execute" if job.kind == "document" else "research.execute", aggregate_id=job.id, payload={"job_id": job.id},
+            db.add(Outbox(id=str(uuid4()), topic="evaluation.execute" if job.kind == "evaluation" else "knowledge.execute" if job.kind == "knowledge" else "document.execute" if job.kind == "document" else "research.execute", aggregate_id=job.id, payload={"job_id": job.id},
                           deduplication_key=f"research.recovery:{job.id}:{job.version}"))
         return len(rows)
 
@@ -64,7 +64,7 @@ def recover(*, bind=None, now=None, max_recoveries=3):
 def publish(topic, payload, delivery_id):
     from src.jobs.celery_app import app
     routes = {"research.execute": ("aperture.research", "research"), "document.execute": ("aperture.document", "documents"),
-              "knowledge.execute": ("aperture.knowledge", "knowledge")}
+              "knowledge.execute": ("aperture.knowledge", "knowledge"), "evaluation.execute": ("aperture.evaluation", "evaluation")}
     if topic not in routes or set(payload) != {"job_id"}:
         raise ValueError("Unregistered outbox message")
     task, queue = routes[topic]

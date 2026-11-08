@@ -25,6 +25,10 @@ async def run_job(job_id, raw_config=None):
 
     async def execute():
         payload = claimed["config"]
+        if payload.get("_operation") == "evaluation.run":
+            from src.evaluations.execution import execute_evaluation
+            with operation("evaluation.run", kind="agent", run_id=job_id):
+                return await execute_evaluation(job_id, token)
         if payload.get("_operation") == "knowledge.graph.extract":
             from src.graphs.extraction import execute_extraction
             with operation("knowledge.graph.extract", kind="chain", run_id=job_id):

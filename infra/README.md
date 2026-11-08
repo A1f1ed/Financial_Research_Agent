@@ -94,7 +94,7 @@ After cutover, **new writes exist only in PostgreSQL**. Do not resume an old SQL
 
 Optional app `.env` fields: `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`. Use the base URL for the project's region. `APERTURE_TRACING_ENABLED=false` disables this integration. The existing OpenTelemetry SDK uses a separate owned provider, sends OTLP/HTTP with the v4 ingestion header, and preserves native CopilotKit Inspector. Research runs, real tools and model generations share trace/run IDs; reports store the trace ID and indicate asynchronous export, not guaranteed remote acceptance.
 
-The exporter explicitly selects model name, run/stage IDs, timings, numeric token usage and error **types**. It does not export prompts, document text, model outputs, reasoning, exception text or auth headers; token counts remain absent if unavailable. API keys stay server-side. An exporter failure does not change financial results. External traces supplement the planned in-app evaluation center, not replace it.
+The exporter explicitly selects model name, run/stage IDs, timings, numeric token usage and error **types**. It does not export prompts, document text, model outputs, reasoning, exception text or auth headers; token counts remain absent if unavailable. API keys stay server-side. An exporter failure does not change financial results. External traces supplement the [in-app evaluation center](../docs/evaluations.md), not replace it. Its dedicated `evaluation-worker` consumes the `evaluation` queue (two independent jobs, serial attempts per run); migrations must run before starting it.
 
 Explicit live checks from `agent` (these create clearly named temporary runs / a small greeting):
 
